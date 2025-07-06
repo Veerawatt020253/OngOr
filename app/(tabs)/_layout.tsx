@@ -1,45 +1,150 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform } from 'react-native';
+import { Tabs } from "expo-router";
+import React from "react";
+import { Platform, StyleSheet, View, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+function FloatingPlayButton({ children, onPress, accessibilityState }) {
+  const focused = accessibilityState?.selected ?? false;
+  return (
+    <View style={styles.fabContainer}>
+      <TouchableOpacity
+        style={[styles.fabButton, focused && styles.fabButtonFocused]}
+        onPress={onPress}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="play" size={32} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: "#4A90E2",
+        tabBarInactiveTintColor: "#8E8E93",
         headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
+        tabBarStyle: [
+          {
+            position: "absolute",
+            left: 40,
+            right: 40,
+            marginStart: 10,
+            marginEnd: 10,
+            bottom: 25,
+            borderRadius: 24,
+            height: 75,
+            backgroundColor: "#fff",
+            borderTopWidth: 0,
+            paddingTop:10,
+            zIndex: 10,
+            ...Platform.select({
+              ios: {
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.13,
+                shadowRadius: 24,
+              },
+              android: {
+                elevation: 12,
+              },
+            }),
           },
-          default: {},
-        }),
-      }}>
+        ],
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontFamily: "kanitM",
+          marginBottom: 5,
+        },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: "หน้าแรก",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              size={24}
+              name={focused ? "home" : "home-outline"}
+              color={color}
+            />
+          ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="rewards"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: "แลกพอยท์",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              size={24}
+              name={focused ? "gift" : "gift-outline"}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="play"
+        options={{
+          title: "",
+          tabBarButton: (props) => <FloatingPlayButton {...props} />,
+        }}
+      />
+      <Tabs.Screen
+        name="guide"
+        options={{
+          title: "คู่มือ",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              size={24}
+              name={focused ? "book" : "book-outline"}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "โปรไฟล์",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons
+              size={24}
+              name={focused ? "person" : "person-outline"}
+              color={color}
+            />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  fabContainer: {
+    position: "absolute",
+    top: -6, // ปรับให้ลอยขึ้น (ค่าประมาณ)
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    zIndex: 99,
+  },
+  fabButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#4A90E2",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  fabButtonFocused: {
+    backgroundColor: "#3578d0",
+  },
+});
