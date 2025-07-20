@@ -45,19 +45,6 @@ export default function index() {
   }
 
   return (
-    // <View style={styles.container}>
-    //   <Text>This is Getting Start</Text>
-    //   <Button
-    //     title="Go to Login"
-    //     color="#841584"
-    //     onPress={() => router.push("(auth)/login")} // ไปที่หน้า Login
-    //   />
-    //   <Button
-    //     title="Go to Register"
-    //     color="#841584"
-    //     onPress={() => router.push("(auth)/register")} // ไปที่หน้า Register
-    //   />
-    // </View>
     <OnboardingScreen />
   );
 }

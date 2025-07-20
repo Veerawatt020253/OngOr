@@ -1,13 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 
 export default function PlayScreen() {
   const router = useRouter();
+  const hasNavigatedRef = useRef(false); // ป้องกันไม่ให้ navigate ซ้ำ
 
   useEffect(() => {
-    // เปลี่ยนไปหน้าอื่นทันทีเมื่อ component โหลดเสร็จ
-    router.replace('/(game)/play'); // เปลี่ยนเป็น path ที่ต้องการ
+    const timeout = setTimeout(() => {
+      if (!hasNavigatedRef.current) {
+        hasNavigatedRef.current = true;
+        router.replace('/(game)/play'); // เปลี่ยน path ตามจริง
+      }
+    }, 50); // รอ 50ms ให้ component mount เสร็จก่อน
+
+    return () => {
+      clearTimeout(timeout);
+    };
   }, []);
 
   return <View style={styles.container} />;

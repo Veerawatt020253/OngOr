@@ -239,10 +239,9 @@ const styles = StyleSheet.create({
   title: {
     color: COLORS.white,
     fontSize: 26,
-    fontWeight: "bold",
     marginTop: 20,
     textAlign: "center",
-    fontFamily: "kanitM",
+    fontFamily: "kanitB",
   },
   indicatorContainer: {
     flexDirection: "row",
@@ -270,9 +269,8 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   btnText: {
-    fontWeight: "bold",
     fontSize: 15,
-    fontFamily: "kanitM",
+    fontFamily: "kanitB",
   },
   footerContainer: {
     height: height * 0.16,

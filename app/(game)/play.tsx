@@ -1,8 +1,8 @@
-// screens/GameReadyScreen.jsx
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   Dimensions,
   Image,
@@ -19,34 +19,82 @@ const { width, height } = Dimensions.get("window");
 const PlayScreen = () => {
   const [permission, requestPermission] = useCameraPermissions();
   const [isReady, setIsReady] = useState(false);
-  const [countdown, setCountdown] = useState(null);
-  const [showCountdown, setShowCountdown] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [isComponentMounted, setIsComponentMounted] = useState(true);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraKey, setCameraKey] = useState(0);
+
   const router = useRouter();
-
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const countdownAnim = useRef(new Animated.Value(0)).current;
+  const navigationTimeoutRef = useRef(null);
 
-  // ฟังก์ชันนับถอยหลัง
-  const startCountdown = () => {
-    setShowCountdown(true);
-    setCountdown(3);
-
-    const countdownInterval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev === 1) {
-          clearInterval(countdownInterval);
-          setTimeout(() => {
-            router.push("/(game)/game");
-          }, 500);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  // Cleanup function
+  const cleanup = () => {
+    if (navigationTimeoutRef.current) {
+      clearTimeout(navigationTimeoutRef.current);
+      navigationTimeoutRef.current = null;
+    }
   };
 
-  // Animation สำหรับปุ่ม
+  // Component cleanup
+  useEffect(() => {
+    return () => {
+      setIsComponentMounted(false);
+      setShowCamera(false);
+      setCameraReady(false);
+      cleanup();
+    };
+  }, []);
+
+  // Initialize camera after permission granted
+  useEffect(() => {
+    if (permission?.granted && isComponentMounted) {
+      const timer = setTimeout(() => {
+        setShowCamera(true);
+        setCameraKey((prev) => prev + 1);
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [permission?.granted, isComponentMounted]);
+
+  // Safe navigation
+  const navigateToGame = () => {
+    if (!isComponentMounted) return;
+
+    try {
+      cleanup();
+      setShowCamera(false);
+      setCameraReady(false);
+
+      navigationTimeoutRef.current = setTimeout(() => {
+        router.replace("/(game)/game");
+      }, 300);
+    } catch (error) {
+      Alert.alert("Error", "ไม่สามารถเข้าสู่เกมได้");
+    }
+  };
+
+  const navigateToTabs = () => {
+    if (!isComponentMounted) return;
+
+    try {
+      cleanup();
+      setShowCamera(false);
+      setCameraReady(false);
+
+      navigationTimeoutRef.current = setTimeout(() => {
+        router.replace("/(tabs)");
+      }, 300);
+    } catch (error) {
+      Alert.alert("Error", "ไม่สามารถกลับหน้าหลักได้");
+    }
+  };
+
+  // Button animation
   const animateButton = () => {
+    if (!isComponentMounted) return;
+
     Animated.sequence([
       Animated.timing(scaleAnim, {
         toValue: 0.95,
@@ -61,36 +109,56 @@ const PlayScreen = () => {
     ]).start();
   };
 
-  // Animation สำหรับ countdown
-  useEffect(() => {
-    if (showCountdown) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(countdownAnim, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(countdownAnim, {
-            toValue: 0,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    }
-  }, [showCountdown]);
-
+  // Handle ready press
   const handleReadyPress = () => {
+    if (!permission?.granted) {
+      Alert.alert("Error", "ไม่มีสิทธิ์เข้าถึงกล้อง");
+      return;
+    }
+
+    if (!cameraReady) {
+      Alert.alert("Error", "กล้องยังไม่พร้อม กรุณารอสักครู่");
+      return;
+    }
+
     setIsReady(true);
     animateButton();
-    startCountdown();
+
+    setTimeout(() => {
+      navigateToGame();
+    }, 500);
   };
 
+  // Handle back press
+  const handleBackPress = () => {
+    if (!isComponentMounted) return;
+    navigateToTabs();
+  };
+
+  // Handle camera ready
+  const handleCameraReady = () => {
+    setCameraReady(true);
+  };
+
+  // Handle camera error
+  const handleCameraError = (error) => {
+    Alert.alert("Camera Error", "เกิดข้อผิดพลาดกับกล้อง");
+    setShowCamera(false);
+    setCameraReady(false);
+  };
+
+  // Permission loading
   if (!permission) {
-    return <View style={styles.loadingContainer} />;
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>กำลังโหลด...</Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
+  // Permission denied
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.container}>
@@ -100,7 +168,11 @@ const PlayScreen = () => {
           </Text>
           <TouchableOpacity
             style={styles.permissionButton}
-            onPress={requestPermission}
+            onPress={() => {
+              requestPermission().catch((error) => {
+                Alert.alert("Error", "ไม่สามารถขอสิทธิ์ได้");
+              });
+            }}
           >
             <Text style={styles.permissionButtonText}>อนุญาต</Text>
           </TouchableOpacity>
@@ -111,119 +183,90 @@ const PlayScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* กล้องเป็นพื้นหลัง */}
       <View style={styles.cameraBackground}>
-        <CameraView style={styles.fullScreenCamera} facing="front" />
+        {/* Camera */}
+        {showCamera && permission.granted && (
+          <View key={`camera-${cameraKey}`} style={StyleSheet.absoluteFill}>
+            <CameraView
+              style={StyleSheet.absoluteFill}
+              facing="front"
+              onCameraReady={handleCameraReady}
+              onMountError={handleCameraError}
+            />
+          </View>
+        )}
 
-        {/* ImageBackground ครอบกล้อง */}
+        {/* Frame overlay */}
         <ImageBackground
-          source={require("@/assets/Frame.png")}
+          source={require("../../assets/Frame.png")}
           style={styles.gameFrameOverlay}
           imageStyle={{ resizeMode: "stretch" }}
           pointerEvents="none"
         />
+
         {/* UI Overlay */}
-        <View style={styles.overlayContainer}>
-          {/* Header - รูปภาพเพียงอย่างเดียว */}
+        <View style={styles.overlayContainer} pointerEvents="box-none">
+          {/* Header */}
           <View style={styles.headerContainer}>
             <Image
-              source={require("@/assets/SectionText.png")}
-              style={{
-                width: 400,
-                height: 600,
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.2,
-                shadowRadius: 5,
-                elevation: 3,
-                marginTop: -10,
-                position: "fixed",
-              }}
+              source={require("../../assets/SectionText.png")}
+              style={styles.headerImage}
               resizeMode="contain"
             />
           </View>
 
-          {/* Spacer */}
-          <View style={{ flex: 1 }} />
-
           {/* Bottom UI */}
-          <View style={styles.bottomUI}>
-            {/* ปุ่มย้อนกลับ - ซ้ายล่างสุด */}
+          <View style={styles.bottomContainer}>
+            {/* Back Button */}
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => router.back()}
+              onPress={handleBackPress}
+              activeOpacity={0.7}
             >
               <Image
-                source={require("@/assets/Undo.png")} // รูปไอคอนย้อนกลับ
+                source={require("../../assets/Undo.png")}
                 style={styles.backIcon}
                 resizeMode="contain"
               />
             </TouchableOpacity>
 
-            {/* Mascot Button - แทนปุ่ม "พร้อมแล้ว" */}
-            <View style={styles.buttonContainer}>
+            {/* Ready Button */}
+            <View style={styles.readyButtonContainer}>
               <Animated.View
                 style={[
-                  styles.mascotButtonWrapper,
+                  styles.readyButtonWrapper,
                   { transform: [{ scale: scaleAnim }] },
                 ]}
               >
                 <TouchableOpacity
-                  style={styles.mascotButton}
+                  style={styles.readyButton}
                   onPress={handleReadyPress}
-                  disabled={isReady}
+                  disabled={isReady || !cameraReady}
                   activeOpacity={0.8}
                 >
                   <Image
-                    source={require("@/assets/readybtn.png")} // รูปมาสคอตของคุณ
+                    source={require("../../assets/readybtn.png")}
                     style={[
-                      { opacity: isReady ? 0.6 : 1, width: 250 }, // ลดความชัดเมื่อกดแล้ว
+                      styles.readyButtonImage,
+                      { opacity: isReady || !cameraReady ? 0.6 : 1 },
                     ]}
                     resizeMode="contain"
                   />
-                  {/* ข้อความสถานะ */}
                 </TouchableOpacity>
               </Animated.View>
             </View>
 
-            {/* Info Section */}
-            <View style={styles.infoContainer}>
+            {/* Mascot */}
+            <View style={styles.mascotContainer}>
               <Image
-                source={require("@/assets/Ongor1.png")} // รูปมาสคอตของคุณ
-                style={[
-                  styles.mascotImage,
-                  { opacity: isReady ? 0.6 : 1 }, // ลดความชัดเมื่อกดแล้ว
-                ]}
+                source={require("../../assets/Ongor1.png")}
+                style={[styles.mascotImage, { opacity: isReady ? 0.6 : 1 }]}
                 resizeMode="contain"
               />
             </View>
           </View>
         </View>
       </View>
-
-      {/* Countdown Overlay */}
-      {showCountdown && countdown > 0 && (
-        <View style={styles.countdownOverlay}>
-          <Animated.View
-            style={[
-              styles.countdownContainer,
-              {
-                opacity: countdownAnim,
-                transform: [
-                  {
-                    scale: countdownAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.5, 1.2],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Text style={styles.countdownText}>{countdown}</Text>
-          </Animated.View>
-        </View>
-      )}
     </SafeAreaView>
   );
 };
@@ -231,10 +274,18 @@ const PlayScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#E8F4FD",
   },
   loadingContainer: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: "#E8F4FD",
+  },
+  loadingText: {
+    fontSize: 18,
+    color: "#2E5BBA",
+    fontFamily: "kanitM",
   },
   permissionContainer: {
     flex: 1,
@@ -259,73 +310,56 @@ const styles = StyleSheet.create({
   permissionButtonText: {
     color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: "bold",
-    fontFamily: "kanitM",
+    fontFamily: "kanitB",
   },
   cameraBackground: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  fullScreenCamera: {
     flex: 1,
+    position: "relative",
   },
   gameFrameOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: "100%",
-    height: "100%",
+    ...StyleSheet.absoluteFillObject,
     zIndex: 1,
   },
   overlayContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
+  headerContainer: {
     position: "absolute",
-    top: 0,
+    top: 50,
     left: 0,
     right: 0,
-    bottom: 0,
-    zIndex: 2,
-    justifyContent: "space-between", // ให้ header อยู่บน, bottomUI อยู่ล่าง
-  },
-
-  headerContainer: {
     alignItems: "center",
-    paddingTop: 50,
-    paddingBottom: 10,
     zIndex: 10,
   },
-  headerBox: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
+  headerImage: {
+    width: 400,
+    height: 600,
+    marginTop: -10,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#2E5BBA",
-    fontFamily: "kanitB",
-    textAlign: "center",
-  },
-  headerSubtitle: {
-    fontSize: 18,
-    color: "#2E5BBA",
-    fontFamily: "kanitM",
-    textAlign: "center",
-    marginTop: 2,
-  },
-  buttonContainer: {
+  bottomContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
     alignItems: "center",
-    paddingVertical: 20,
+    paddingBottom: 20,
+  },
+  backButton: {
+    position: "absolute",
+    bottom: -20,
+    left: 0,
+    padding: 10,
+    zIndex: 20,
+  },
+  backIcon: {
+    width: 100,
+    height: 100,
+  },
+  readyButtonContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+    zIndex: 30,
   },
   readyButtonWrapper: {
     shadowColor: "#000",
@@ -333,179 +367,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    zIndex: 31,
   },
   readyButton: {
-    paddingHorizontal: 50,
-    paddingVertical: 18,
-    borderRadius: 30,
-    minWidth: 200,
-    alignItems: "center",
-  },
-  readyButtonText: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "bold",
-    fontFamily: "kanitM",
-  },
-  infoContainer: {
-    paddingHorizontal: 20,
-    marginBottom: -50,
-    alignItems: "flex-end",
-  },
-  infoBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 15,
-    padding: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  infoText: {
-    fontSize: 14,
-    color: "#666666",
-    textAlign: "center",
-    marginBottom: 3,
-    fontFamily: "kanitM",
-  },
-  readyStatusBox: {
-    backgroundColor: "#E8F4FD",
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 15,
-    marginTop: 8,
-    alignSelf: "center",
-  },
-  readyStatusText: {
-    fontSize: 14,
-    color: "#2E5BBA",
-    fontWeight: "bold",
-    fontFamily: "kanitM",
-  },
-  countdownOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 10,
-  },
-  countdownContainer: {
-    backgroundColor: "#FFFFFF",
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  countdownText: {
-    fontSize: 60,
-    fontWeight: "bold",
-    color: "#2946FF",
-    fontFamily: "kanitB",
-  },
-  headerContainer: {
-    position: "absolute", // เพิ่ม absolute positioning
-    top: 50,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 10, // ให้อยู่ด้านบนสุด
-  },
-  headerBox: {
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  bottomUI: {
-    width: "100%",
-    paddingTop: 20,
-    paddingBottom: -25,
-    alignItems: "center",
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-
-  // ปุ่มย้อนกลับ - ซ้ายล่างสุด
-  backButton: {
-    position: "absolute",
-    bottom: 20,
-    left: 20,
-    borderRadius: 25,
-    padding: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-    zIndex: 20,
-  },
-  backIcon: {
-    width: 24,
-    height: 24,
-  },
-
-  // ปุ่มมาสคอต
-  buttonContainer: {
-    alignItems: "center",
-    paddingVertical: 20,
-  },
-  mascotButtonWrapper: {
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  mascotButton: {
     alignItems: "center",
     justifyContent: "center",
     padding: 20,
-    minWidth: 160,
-    minHeight: 160,
-    marginBottom: -170,
+    zIndex: 32,
   },
-  mascotImage: {
-    width: 300,
-    height: 300,
-    marginBottom: 10,
+  readyButtonImage: {
+    width: 200,
+    height: 100,
+    zIndex: 10,
+    top: 60,
   },
-  mascotButtonText: {
+  statusText: {
+    fontSize: 14,
     color: "#2E5BBA",
-    fontSize: 16,
-    fontWeight: "bold",
     fontFamily: "kanitM",
+    marginTop: 10,
     textAlign: "center",
   },
-
-  // ปรับ header image ให้เหมาะสม
-  headerImageOnly: {
-    width: 250, // ลดจาก 400
-    height: 80, // ลดจาก 600
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-    marginTop: 10, // เปลี่ยนจาก -10
+  mascotContainer: {
+    alignItems: "flex-end",
+    paddingRight: 20,
+  },
+  mascotImage: {
+    width: 250,
+    height: 250,
+    top: 30,
+    right: -40,
   },
 });
 

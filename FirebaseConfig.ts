@@ -9,10 +9,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const firebaseConfig = {
   apiKey: "AIzaSyA8dseBnpICQMeSn0wSsgfj9ZIXCT2lpN4",
   authDomain: "myneuro-43454.firebaseapp.com",
+  databaseURL: "https://myneuro-43454-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "myneuro-43454",
-  storageBucket: "myneuro-43454.appspot.com",
+  storageBucket: "myneuro-43454.firebasestorage.app",
   messagingSenderId: "800080342020",
-  appId: "1:800080342020:web:b4fa64081b3d8033e99951"
+  appId: "1:800080342020:web:470151c891dafce1e99951"
 };
 
 // ✅ ตรวจสอบว่า Firebase ถูก initialize แล้วหรือยัง

@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "800080342020",
+    "firebase_url": "https://myneuro-43454-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "myneuro-43454",
+    "storage_bucket": "myneuro-43454.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:800080342020:android:282c33c14e0ce833e99951",
+        "android_client_info": {
+          "package_name": "com.ongor.fun"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "800080342020-iq03he55phpkk5rs5bmsvk2pc0s8huni.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMXlkfLt1WEIk3TZ6h7vwncSRRK4MoLVs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "800080342020-iq03he55phpkk5rs5bmsvk2pc0s8huni.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

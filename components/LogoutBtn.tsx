@@ -1,15 +1,17 @@
 // components/LogoutButton.jsx
 import { auth } from "@/FirebaseConfig";
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import { useState } from "react";
 import {
-    Alert,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    ActivityIndicator,
+  ActivityIndicator,
+  Alert,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 const LogoutButton = ({ style, textStyle }) => {
@@ -53,33 +55,43 @@ const LogoutButton = ({ style, textStyle }) => {
       onPress={handleLogout}
       disabled={isLoading}
     >
-      {isLoading ? (
-        <ActivityIndicator color="#fff" size="small" />
-      ) : (
-        <Text style={[styles.logoutText, textStyle]}>ออกจากระบบ</Text>
-      )}
+      <View style={styles.content}>
+        <Ionicons name="log-out-outline" size={20} color="#3b82f6" />
+        {isLoading ? (
+          <ActivityIndicator color="#3b82f6" size="small" style={{ marginLeft: 8 }} />
+        ) : (
+          <Text style={[styles.logoutText, textStyle]}>ออกจากระบบ</Text>
+        )}
+      </View>
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   logoutButton: {
-    backgroundColor: "#dc3545",
+    backgroundColor: "#fff",
     padding: 12,
     borderRadius: 12,
-    width: "90%",
+    width: "100%",
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 3,
+    marginTop: "3%",
+    borderWidth: 2,
+    borderColor: "#77a5ff",
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   logoutText: {
-    color: "#fff",
+    color: "#3b82f6",
     fontSize: 18,
-    fontWeight: "bold",
     fontFamily: "kanitM",
+    marginLeft: 8,
   },
 });
 

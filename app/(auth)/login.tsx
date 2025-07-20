@@ -1,21 +1,23 @@
 import { auth } from "@/FirebaseConfig";
+import { Ionicons } from "@expo/vector-icons"; // เพิ่ม import นี้
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useEffect, useRef, useState } from "react";
 import {
-    Alert,
-    Animated,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  Animated,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from '@expo/vector-icons'; // เพิ่ม import นี้
 
 const FloatingLabelInput = ({
   placeholder,
@@ -92,50 +94,59 @@ const Login = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.container}>
-          {/* ✅ เพิ่มปุ่มย้อนกลับ */}
-          <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-            <Ionicons name="arrow-back" size={24} color="#2423ff" />
-          </TouchableOpacity>
-
-          <Image
-            source={{ uri: "https://img2.pic.in.th/pic/LogoRound.png" }}
-            style={styles.logo}
-          />
-          <Text style={styles.title}>เข้าสู่ระบบ</Text>
-
-          <FloatingLabelInput
-            placeholder="อีเมล"
-            value={mail}
-            onChangeText={setMail}
-            keyboardType="email-address"
-          />
-
-          <View style={styles.passwordContainer}>
-            <FloatingLabelInput
-              placeholder="รหัสผ่าน"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-            />
-          </View>
-
-          <TouchableOpacity style={styles.submit} onPress={handleLogin}>
-            <Text style={styles.submitText}>เข้าสู่ระบบ</Text>
-          </TouchableOpacity>
-
-          <View style={styles.underline} />
-          <View style={styles.registerContainer}>
-            <Text style={styles.registerText}>ยังไม่มีบัญชี?</Text>
-            <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
-              <Text style={styles.registerLink}>สมัครเลย</Text>
+    <SafeAreaProvider>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0} // ปรับตามตำแหน่ง SafeArea/ปุ่ม
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          <SafeAreaView style={styles.container}>
+            {/* ✅ เพิ่มปุ่มย้อนกลับ */}
+            <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
+              <Ionicons name="arrow-back" size={24} color="#2423ff" />
             </TouchableOpacity>
-          </View>
-        </SafeAreaView>
-      </SafeAreaProvider>
-    </ScrollView>
+
+            <Image
+              source={{ uri: "https://img2.pic.in.th/pic/LogoRound.png" }}
+              style={styles.logo}
+            />
+            <Text style={styles.title}>เข้าสู่ระบบ</Text>
+
+            <FloatingLabelInput
+              placeholder="อีเมล"
+              value={mail}
+              onChangeText={setMail}
+              keyboardType="email-address"
+            />
+
+            <View style={styles.passwordContainer}>
+              <FloatingLabelInput
+                placeholder="รหัสผ่าน"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+              />
+            </View>
+
+            <TouchableOpacity style={styles.submit} onPress={handleLogin}>
+              <Text style={styles.submitText}>เข้าสู่ระบบ</Text>
+            </TouchableOpacity>
+
+            <View style={styles.underline} />
+            <View style={styles.registerContainer}>
+              <Text style={styles.registerText}>ยังไม่มีบัญชี?</Text>
+              <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
+                <Text style={styles.registerLink}>สมัครเลย</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaProvider>
   );
 };
 
@@ -153,10 +164,10 @@ const styles = StyleSheet.create({
     marginTop: 30,
   },
   // ✅ ปรับปรุง style ของปุ่มย้อนกลับ
-  backButton: { 
-    position: "absolute", 
-    top: 50, 
-    left: 20, 
+  backButton: {
+    position: "absolute",
+    top: 50,
+    left: 20,
     padding: 10,
     backgroundColor: "#fff",
     borderRadius: 25,
@@ -168,12 +179,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   title: {
-    fontWeight: "bold",
     fontSize: 28,
     marginTop: 10,
     marginBottom: 20,
     color: "#2423ff",
-    fontFamily: 'kanitM',
+    fontFamily: "kanitB",
   },
   inputContainer: {
     width: "90%",
@@ -211,7 +221,7 @@ const styles = StyleSheet.create({
     width: "90%",
     alignItems: "center",
   },
-  submitText: { color: "#fff", fontSize: 18, fontWeight: "bold", fontFamily: "kanitM" },
+  submitText: { color: "#fff", fontSize: 18, fontFamily: "kanitB" },
   logo: {
     width: 175,
     height: 175,
@@ -221,7 +231,6 @@ const styles = StyleSheet.create({
   registerLink: {
     fontSize: 16,
     color: "#2423ff",
-    fontWeight: "bold",
     fontFamily: "kanitM",
     textDecorationStyle: "solid",
     textDecorationLine: "underline",

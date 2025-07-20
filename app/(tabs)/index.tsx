@@ -1,18 +1,30 @@
 import { DevelopmentStatsCard } from "@/components/DevelopmentStatsCard";
-import React from "react";
+import { getStreak } from "@/lib/streakUtils";
+import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TouchableOpacity,
   Dimensions,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
 
 const WIDTH = Dimensions.get("window").width;
 
 export default function HomeScreen() {
+  const [streak, setStreak] = useState(0);
+
+  useEffect(() => {
+    async function fetchStreak() {
+      const currentStreak = await getStreak();
+      setStreak(currentStreak)
+    }
+
+    fetchStreak();
+  }, []);
+
   return (
     <ScrollView
       style={styles.container}
@@ -38,7 +50,7 @@ export default function HomeScreen() {
         <View style={styles.contentContainer}>
           <Text style={styles.streakLabel}>คุณเล่นต่อเนื่องมาแล้ว</Text>
           <View style={styles.streakBox}>
-            <Text style={styles.streakNum}>99</Text>
+            <Text style={styles.streakNum}>{streak}</Text>
             <Text style={styles.streakUnit}>วัน</Text>
           </View>
         </View>
@@ -49,8 +61,7 @@ export default function HomeScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.shopLabel}>ร้านค้าพ้อยท์</Text>
           <Text style={styles.pointText}>
-            คุณมีพ้อยท์สะสม : <Text style={{ fontWeight: "bold" }}>2,450</Text>{" "}
-            พ้อยท์
+            คุณมีพ้อยท์สะสม : <Text>0</Text> พ้อยท์
           </Text>
         </View>
         <Image
@@ -77,7 +88,6 @@ const styles = StyleSheet.create({
   },
   header: {
     fontSize: 34,
-    fontWeight: "bold",
     color: "#3578d0",
     marginBottom: 16,
     fontFamily: "kanitB",
@@ -106,7 +116,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowRadius: 10,
     elevation: 3,
-    overflow: "hidden"
+    overflow: "hidden",
   },
   cardSimple: {
     backgroundColor: "#fff",
@@ -138,7 +148,7 @@ const styles = StyleSheet.create({
     height: 190,
     opacity: 0.7, // ทำให้โปร่งใสเล็กน้อยเพื่อให้ดูเป็นพื้นหลัง
     marginStart: -10,
-    marginBottom: -30
+    marginBottom: -30,
   },
 
   contentContainer: {
@@ -165,7 +175,6 @@ const styles = StyleSheet.create({
   streakNum: {
     color: "#fff",
     fontSize: 32, // เพิ่มจาก 28 เป็น 32
-    fontWeight: "bold",
     fontFamily: "kanitM",
     marginRight: 8, // เพิ่มจาก 6 เป็น 8
   },
@@ -190,7 +199,7 @@ const styles = StyleSheet.create({
     width: 80, // เพิ่มจาก 40 เป็น 50
     height: 80, // เพิ่มจาก 40 เป็น 50
     marginRight: -15,
-    marginBottom: -35
+    marginBottom: -35,
   },
   settingText: {
     color: "#3578d0",

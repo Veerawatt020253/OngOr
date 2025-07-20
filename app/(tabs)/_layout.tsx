@@ -1,10 +1,16 @@
-import { Tabs } from "expo-router";
-import React from "react";
-import { Platform, StyleSheet, View, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Tabs, useRouter } from "expo-router";
+import React from "react";
+import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 
 function FloatingPlayButton({ children, onPress, accessibilityState }) {
   const focused = accessibilityState?.selected ?? false;
+  const router = useRouter(); // ✅ ใช้ router
+
+  const handlePress = () => {
+    // ✅ ไปหน้าอื่นที่อยู่นอก group (tabs) เช่น /play-screen
+    router.push("/(game)/play"); // เปลี่ยนเป็น path ที่คุณต้องการ
+  };
   return (
     <View style={styles.fabContainer}>
       <TouchableOpacity
@@ -37,7 +43,7 @@ export default function TabLayout() {
             height: 75,
             backgroundColor: "#fff",
             borderTopWidth: 0,
-            paddingTop:10,
+            paddingTop: 10,
             zIndex: 10,
             ...Platform.select({
               ios: {
@@ -85,13 +91,22 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="play"
         options={{
           title: "",
           tabBarButton: (props) => <FloatingPlayButton {...props} />,
         }}
+      /> */}
+      <Tabs.Screen
+        name="play"
+        options={{
+          title: "",
+          tabBarButton: (props) => <FloatingPlayButton {...props} />,
+          tabBarStyle: { display: "none" }, // ซ่อน tab bar เมื่อแสดงหน้านี้ (optional)
+        }}
       />
+
       <Tabs.Screen
         name="guide"
         options={{

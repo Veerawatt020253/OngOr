@@ -1,6 +1,8 @@
+import { auth } from "@/FirebaseConfig"; // อย่าลืม import auth ด้วย
 import { Ionicons } from "@expo/vector-icons"; // หรือใช้ icon ตัวอื่นก็ได้
 import { useNavigation } from "@react-navigation/native";
-import React from "react";
+import { get, getDatabase, ref } from "firebase/database";
+import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -11,13 +13,29 @@ import {
   View,
 } from "react-native";
 import { BarChart } from "react-native-chart-kit";
+import { getStreak } from "@/lib/streakUtils";
 
 const { width } = Dimensions.get("window");
 
 export default function StatsScreen() {
+  const [consecutiveDays, setConsecutiveDays] = useState(0);
+  const [totalPoints, setTotalPoints] = useState(0);
+  const [maxScore, setMaxScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+
   const navigation = useNavigation(); // ต้องอยู่ในฟังก์ชัน StatsScreen
   const CARD_WIDTH = 320;
   const CARD_HEIGHT = 170;
+
+  useEffect(() => {
+    async function fetchStreak() {
+      const currentStreak = await getStreak();
+      console.log(currentStreak);
+      setStreak(currentStreak);
+    }
+
+    fetchStreak();
+  }, []);
 
   const data = {
     labels: ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."],
@@ -35,6 +53,107 @@ export default function StatsScreen() {
     propsForBackgroundLines: { stroke: "#CAE6FC" },
     decimalPlaces: 0,
   };
+
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchUserScores = async () => {
+      const db = getDatabase();
+      const uid = auth.currentUser?.uid;
+      if (!uid) {
+        console.log("No user logged in");
+        return;
+      }
+
+      try {
+        const dbRef = ref(db, `user_scores/${uid}`);
+        const snapshot = await get(dbRef);
+
+        if (!snapshot.exists()) {
+          if (!isActive) return;
+          setConsecutiveDays(0);
+          setTotalPoints(0);
+          setMaxScore(0);
+          console.log("No score data found");
+          return;
+        }
+
+        const data = snapshot.val();
+
+        // แปลง object วันที่เป็น array sorted จากน้อยไปมาก
+        const dateStrings = Object.keys(data).sort();
+
+        let lastDate = null;
+        let consecutiveCount = 0;
+        let tempTotalPoints = 0;
+        let tempMaxScore = 0;
+
+        // ฟังก์ชันช่วยแปลง date string เป็น Date obj (local time)
+        function parseDate(dateStr) {
+          const parts = dateStr.split("-");
+          return new Date(parts[0], parts[1] - 1, parts[2]);
+        }
+
+        // วนเช็คคะแนนรวมและนับวันต่อเนื่องย้อนหลังจากวันล่าสุด
+        for (let i = dateStrings.length - 1; i >= 0; i--) {
+          const dateStr = dateStrings[i];
+          const dayData = data[dateStr];
+
+          let dayTotal = 0;
+          let dayMax = 0;
+          Object.values(dayData).forEach((entry) => {
+            const score = Number(entry.score) || 0;
+            dayTotal += score;
+            if (score > dayMax) dayMax = score;
+            if (score > tempMaxScore) tempMaxScore = score;
+          });
+
+          tempTotalPoints += dayTotal;
+
+          const date = parseDate(dateStr);
+
+          if (lastDate === null) {
+            consecutiveCount = 1;
+          } else {
+            const diffTime = lastDate.getTime() - date.getTime();
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+            if (diffDays === 1) {
+              consecutiveCount++;
+            } else {
+              break;
+            }
+          }
+
+          lastDate = date;
+        }
+
+        if (!isActive) return;
+
+        setConsecutiveDays(consecutiveCount);
+        setTotalPoints(tempTotalPoints);
+        setMaxScore(tempMaxScore);
+
+        console.log("Consecutive Days:", consecutiveCount);
+        console.log("Total Points:", tempTotalPoints);
+        console.log("Max Score:", tempMaxScore);
+      } catch (error) {
+        console.error("Error fetching scores:", error);
+      }
+    };
+
+    fetchUserScores();
+
+    const intervalId = setInterval(() => {
+      if (isActive) fetchUserScores();
+    }, 10000); // ทุก 10 วินาที
+
+    return () => {
+      isActive = false;
+      clearInterval(intervalId);
+    };
+  }, []);
+
   return (
     <View>
       <TouchableOpacity
@@ -56,7 +175,7 @@ export default function StatsScreen() {
             />
             <View style={styles.playedBox}>
               <Text style={styles.playedText}>คุณเล่นต่อเนื่องมาแล้ว</Text>
-              <Text style={styles.playedDays}>99 วัน</Text>
+              <Text style={styles.playedDays}>{streak} วัน</Text>
             </View>
           </View>
 
@@ -65,7 +184,7 @@ export default function StatsScreen() {
             {/* กล่องสะสมคะแนน */}
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>สะสมแล้ว</Text>
-              <Text style={styles.statValue}>2,450</Text>
+              <Text style={styles.statValue}>{totalPoints}</Text>
               <Text style={styles.statUnit}>คะแนน</Text>
               <Image
                 source={require("@/assets/trophy.png")}
@@ -78,14 +197,14 @@ export default function StatsScreen() {
               {/* คะแนนสูงสุด */}
               <View style={styles.halfBox}>
                 <Text style={styles.statLabel}>คะแนนสูงสุด</Text>
-                <Text style={styles.statValue}>1,120</Text>
+                <Text style={styles.statValue}>{maxScore}</Text>
               </View>
 
               {/* พัฒนาการ */}
               <View style={[styles.halfBox, styles.progressBox]}>
                 <Text style={styles.statLabel}>พัฒนาการ</Text>
                 <Text style={styles.statLevel}>ระดับ</Text>
-                <Text style={styles.statValue}>5</Text>
+                <Text style={styles.statValue}>1</Text>
               </View>
             </View>
           </View>
@@ -163,7 +282,6 @@ const styles = StyleSheet.create({
   },
   playedText: {
     fontSize: 22,
-    fontWeight: "bold",
     color: "#4C749C",
     fontFamily: "kanitB",
   },
@@ -175,7 +293,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     fontSize: 24,
     color: "#fff",
-    fontWeight: "bold",
     alignSelf: "flex-start",
     fontFamily: "kanitB",
   },
@@ -202,12 +319,10 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 22,
     color: "#1E3A8A",
-    fontWeight: "bold",
     fontFamily: "kanitB",
   },
   statValue: {
     fontSize: 28,
-    fontWeight: "bold",
     color: "#1E3A8A",
     marginTop: 4,
     fontFamily: "kanitB",
@@ -221,7 +336,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: "#1E3A8A",
     marginVertical: 4,
-    fontWeight: "bold",
     fontFamily: "kanitB",
   },
   trophy: {
@@ -249,7 +363,6 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 18,
     color: "#1E3A8A",
-    fontWeight: "bold",
     marginBottom: 4,
     fontFamily: "kanitB",
   },
@@ -263,7 +376,6 @@ const styles = StyleSheet.create({
   },
   chartDateText: {
     color: "#fff",
-    fontWeight: "bold",
   },
   chartImage: {
     width: "100%",

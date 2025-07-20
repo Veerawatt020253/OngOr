@@ -1,23 +1,25 @@
-import { useState, useEffect, useRef } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  Animated,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-  Image
-} from "react-native";
-import { SafeAreaView, SafeAreaProvider } from "react-native-safe-area-context";
 import { FontAwesome } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Animated,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 // Firebase imports
 import { auth, db } from "@/FirebaseConfig";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { collection, addDoc } from "firebase/firestore";
+import { addDoc, collection, setDoc, doc } from "firebase/firestore";
 
 const FloatingLabelInput = ({
   placeholder,
@@ -71,6 +73,8 @@ const FloatingLabelInput = ({
 };
 
 export default function Register() {
+  const [contact, setContact] = useState("");
+  const [fullname, setFullname] = useState("");
   const [mail, setMail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -84,7 +88,7 @@ export default function Register() {
   };
 
   const handleRegister = async () => {
-    if (!username || !mail || !age || !password || !selectedSex) {
+    if (!fullname || !username || !mail || !age || !password || !selectedSex) {
       Alert.alert("ข้อผิดพลาด", "กรุณากรอกข้อมูลให้ครบทุกช่อง");
       return;
     }
@@ -97,12 +101,14 @@ export default function Register() {
       );
       const user = userCredential.user;
 
-      await addDoc(collection(db, "users"), {
+      await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
+        fullname,
         username,
         email: mail,
         age,
         sex: selectedSex,
+        contact, // ← เพิ่มตรงนี้
       });
 
       Alert.alert("สำเร็จ", "สมัครสมาชิกเรียบร้อย!");
@@ -118,130 +124,153 @@ export default function Register() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <SafeAreaProvider>
-        <SafeAreaView style={styles.container}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.navigate("index")}
-          >
-            <FontAwesome name="arrow-left" size={24} color="black" />
-          </TouchableOpacity>
+    <SafeAreaProvider>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0} // ปรับตามตำแหน่ง SafeArea/ปุ่ม
+      >
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <SafeAreaView style={styles.container}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate("index")}
+            >
+              <FontAwesome name="arrow-left" size={24} color="black" />
+            </TouchableOpacity>
 
-          <Image
-            source={{ uri: "https://img2.pic.in.th/pic/LogoRound.png" }}
-            style={styles.logo}
-          />
-
-          <Text style={styles.title}>สมัครสมาชิก</Text>
-
-          {/* Floating Label Input */}
-          <FloatingLabelInput
-            placeholder="ชื่อผู้ใช้"
-            value={username}
-            onChangeText={setUsername}
-          />
-          <FloatingLabelInput
-            placeholder="อีเมล"
-            value={mail}
-            onChangeText={setMail}
-            keyboardType="email-address"
-          />
-
-          {/* รหัสผ่าน */}
-          <View style={styles.passwordContainer}>
-            <FloatingLabelInput
-              placeholder="รหัสผ่าน"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
+            <Image
+              source={{ uri: "https://img2.pic.in.th/pic/LogoRound.png" }}
+              style={styles.logo}
             />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.showPasswordButton}
-            >
-              <FontAwesome
-                name={showPassword ? "eye-slash" : "eye"}
-                size={20}
-                color="#aaa"
-                style={{alignContent: 'center', alignSelf: 'center', alignItems: "center", justifyContent: 'center', paddingTop: 8}}
-              />
-            </TouchableOpacity>
-          </View>
 
-          <FloatingLabelInput
-            placeholder="อายุ"
-            value={age}
-            onChangeText={setAge}
-            keyboardType="numeric"
-          />
+            <Text style={styles.title}>สมัครสมาชิก</Text>
 
-          {/* ช่องเลือกเพศ */}
-          <View style={styles.sexSelection}>
-            <TouchableOpacity
-              style={[
-                styles.sexBtn,
-                selectedSex === "male" && styles.selectedMale,
-              ]}
-              onPress={() => handleSelectSex("male")}
-            >
-              <FontAwesome
-                name={"mars"}
-                size={20}
-                color={selectedSex === "male" ? "#2423ff" : "#aaa"}
+            <FloatingLabelInput
+              placeholder="ชื่อจริง นามสกุล"
+              value={fullname}
+              onChangeText={setFullname}
+            />
+
+            {/* Floating Label Input */}
+            <FloatingLabelInput
+              placeholder="ชื่อผู้ใช้"
+              value={username}
+              onChangeText={setUsername}
+            />
+            <FloatingLabelInput
+              placeholder="เบอร์โทรติดต่อ"
+              value={contact}
+              onChangeText={setContact}
+              keyboardType="phone-pad"
+            />
+
+            <FloatingLabelInput
+              placeholder="อีเมล"
+              value={mail}
+              onChangeText={setMail}
+              keyboardType="email-address"
+            />
+
+            {/* รหัสผ่าน */}
+            <View style={styles.passwordContainer}>
+              <FloatingLabelInput
+                placeholder="รหัสผ่าน"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
               />
-              <Text
-                style={[
-                  styles.sexBtnText,
-                  selectedSex === "male" && { color: "#2423ff" },
-                ]}
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.showPasswordButton}
               >
-                ชาย
-              </Text>
-            </TouchableOpacity>
+                <FontAwesome
+                  name={showPassword ? "eye-slash" : "eye"}
+                  size={20}
+                  color="#aaa"
+                  style={{
+                    alignContent: "center",
+                    alignSelf: "center",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingTop: 8,
+                  }}
+                />
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity
-              style={[
-                styles.sexBtn,
-                selectedSex === "female" && styles.selectedFemale,
-              ]}
-              onPress={() => handleSelectSex("female")}
-            >
-              <FontAwesome
-                name={"venus"}
-                size={20}
-                color={selectedSex === "female" ? "#ff1493" : "#aaa"}
-              />
-              <Text
+            <FloatingLabelInput
+              placeholder="อายุ"
+              value={age}
+              onChangeText={setAge}
+              keyboardType="numeric"
+            />
+
+            {/* ช่องเลือกเพศ */}
+            <View style={styles.sexSelection}>
+              <TouchableOpacity
                 style={[
-                  styles.sexBtnText,
-                  selectedSex === "female" && { color: "#ff1493" },
+                  styles.sexBtn,
+                  selectedSex === "male" && styles.selectedMale,
                 ]}
+                onPress={() => handleSelectSex("male")}
               >
-                หญิง
-              </Text>
+                <FontAwesome
+                  name={"mars"}
+                  size={20}
+                  color={selectedSex === "male" ? "#2423ff" : "#aaa"}
+                />
+                <Text
+                  style={[
+                    styles.sexBtnText,
+                    selectedSex === "male" && { color: "#2423ff" },
+                  ]}
+                >
+                  ชาย
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.sexBtn,
+                  selectedSex === "female" && styles.selectedFemale,
+                ]}
+                onPress={() => handleSelectSex("female")}
+              >
+                <FontAwesome
+                  name={"venus"}
+                  size={20}
+                  color={selectedSex === "female" ? "#ff1493" : "#aaa"}
+                />
+                <Text
+                  style={[
+                    styles.sexBtnText,
+                    selectedSex === "female" && { color: "#ff1493" },
+                  ]}
+                >
+                  หญิง
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.submit} onPress={handleRegister}>
+              <Text style={styles.submitText}>สมัครสมาชิก</Text>
             </TouchableOpacity>
-          </View>
 
-          <TouchableOpacity style={styles.submit} onPress={handleRegister}>
-            <Text style={styles.submitText}>สมัครสมาชิก</Text>
-          </TouchableOpacity>
+            <View style={styles.underline} />
 
-          <View style={styles.underline} />
-
-          <View style={styles.registerContainer}>
-                    <Text style={styles.registerText}>
-                      คุณมีบัญชีแล้วใช่มั้ย?{" "}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => navigation.navigate("(auth)/login")}
-                    >
-                      <Text style={styles.registerLink}>เข้าสู่ระบบ</Text>
-                    </TouchableOpacity>
-                  </View>
-        </SafeAreaView>
-      </SafeAreaProvider>
-    </ScrollView>
+            <View style={styles.registerContainer}>
+              <Text style={styles.registerText}>คุณมีบัญชีแล้วใช่มั้ย? </Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("(auth)/login")}
+              >
+                <Text style={styles.registerLink}>เข้าสู่ระบบ</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaProvider>
   );
 }
 
@@ -257,16 +286,15 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     justifyContent: "center",
-    marginTop: 30
+    marginTop: 30,
   },
   backButton: { position: "absolute", top: 30, left: 20, padding: 10 },
   title: {
-    fontWeight: "bold",
     fontSize: 28,
     marginTop: 10,
     marginBottom: 20,
     color: "#2423ff",
-    fontFamily: 'kanitM'
+    fontFamily: "kanitB",
   },
   inputContainer: {
     width: "90%",
@@ -333,7 +361,7 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
     height: 62,
-    marginTop: 13
+    marginTop: 13,
   },
   submit: {
     backgroundColor: "#2423ff",
@@ -343,7 +371,12 @@ const styles = StyleSheet.create({
     width: "90%",
     alignItems: "center",
   },
-  submitText: { color: "#fff", fontSize: 18, fontWeight: "bold", fontFamily: "kanitM" },
+  submitText: {
+    color: "#fff",
+    fontSize: 18,
+
+    fontFamily: "kanitB",
+  },
   logo: {
     width: 175,
     height: 175,
@@ -353,10 +386,10 @@ const styles = StyleSheet.create({
   registerLink: {
     fontSize: 16,
     color: "#2423ff",
-    fontWeight: "bold",
-    fontFamily: "kanitM",
+
+    fontFamily: "kanitB",
     textDecorationStyle: "solid",
-    textDecorationLine: "underline"
+    textDecorationLine: "underline",
   },
   underline: {
     width: "85%",

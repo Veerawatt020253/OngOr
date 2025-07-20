@@ -1,7 +1,10 @@
+import { auth } from "../../FirebaseConfig";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { getDatabase, push, ref } from "firebase/database";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
+  Animated,
   Dimensions,
   Image,
   Modal,
@@ -9,7 +12,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Animated,
 } from "react-native";
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -38,6 +40,9 @@ export default function GameScreen() {
   // Add clock timer ref
   const clockTimerRef = useRef(null);
   const gameTimerRef = useRef(null);
+  const captureTimerRef = useRef(null);
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isCameraMounted, setIsCameraMounted] = useState(true); // Add this state
 
   const poseStock = [
     "ArmsSide",
@@ -52,24 +57,10 @@ export default function GameScreen() {
     "TouchHeadRight",
   ];
 
-  const poseNameMap = {
-    ArmsSide: "กางแขนออกข้าง",
-    ArmsUp: "ยกแขนขึ้น",
-    TouchHead: "แตะศีรษะ",
-    HeartHands: "พนมมือกลางอก",
-    Idle: "ตัวตรง",
-    ArmLeftUp: "ยกแขนซ้ายขึ้น",
-    ArmRightUp: "ยกแขนขวาขึ้น",
-    ArmLeftSide: "กางแขนซ้าย",
-    ArmRightSide: "กางแขนขวา",
-    TouchHeadLeft: "จับหัวข้างซ้าย",
-    TouchHeadRight: "จับหัวข้างขวา",
-  };
-
   // เพิ่ม mapping สำหรับรูปภาพ
   const poseImageMap = {
-    ArmsSide: require("@/assets/poses/ArmSide.png"),
-    ArmsUp: require("@/assets/poses/ArmsUp.png"),
+    ArmsSide: require("../../assets/poses/ArmSide.png"),
+    ArmsUp: require("../../assets/poses/ArmsUp.png"),
     TouchHead: require("../../assets/poses/TouchHead.png"),
     HeartHands: require("../../assets/poses/HeartHands.png"),
     ArmLeftUp: require("../../assets/poses/ArmLeftUp.png"),
@@ -91,24 +82,24 @@ export default function GameScreen() {
 
   const scorePopupParticles = [
     {
-      background: require("@/assets/scorePopups/bg1.png"),
-      text: require("@/assets/scorePopups/text1.png"),
+      background: require("../../assets/scorePopups/bg1.png"),
+      text: require("../../assets/scorePopups/text1.png"),
     },
     {
-      background: require("@/assets/scorePopups/bg2.png"),
-      text: require("@/assets/scorePopups/text2.png"),
+      background: require("../../assets/scorePopups/bg2.png"),
+      text: require("../../assets/scorePopups/text2.png"),
     },
     {
-      background: require("@/assets/scorePopups/bg3.png"),
-      text: require("@/assets/scorePopups/text3.png"),
+      background: require("../../assets/scorePopups/bg3.png"),
+      text: require("../../assets/scorePopups/text3.png"),
     },
     {
-      background: require("@/assets/scorePopups/bg4.png"),
-      text: require("@/assets/scorePopups/text4.png"),
+      background: require("../../assets/scorePopups/bg4.png"),
+      text: require("../../assets/scorePopups/text4.png"),
     },
     {
-      background: require("@/assets/scorePopups/bg5.png"),
-      text: require("@/assets/scorePopups/text5.png"),
+      background: require("../../assets/scorePopups/bg5.png"),
+      text: require("../../assets/scorePopups/text5.png"),
     },
   ];
 
@@ -121,7 +112,7 @@ export default function GameScreen() {
   const isSettingsRef = useRef(false);
   const [scoreSaved, setScoreSaved] = useState(false);
   const [showGameplayOverlay, setShowGameplayOverlay] = useState(true);
-  const [waveCountdown, setWaveCountdown] = useState(5); // 5 วิ จำท่า
+  const [waveCountdown, setWaveCountdown] = useState(5);
   const [showStartPopup, setShowStartPopup] = useState(false);
 
   useEffect(() => {
@@ -139,24 +130,24 @@ export default function GameScreen() {
       // Reset clock index when gameplay starts
       setClockIndex(0);
 
-      setShowStartPopup(true); // ให้แสดงก่อน
+      setShowStartPopup(true);
 
       // ทำ Fade In
       Animated.timing(popupOpacity, {
         toValue: 1,
-        duration: 300, // 0.3 วินาที
+        duration: 300,
         useNativeDriver: true,
       }).start(() => {
         // หลังแสดงครบ 1 วิ ให้ Fade Out
         setTimeout(() => {
           Animated.timing(popupOpacity, {
             toValue: 0,
-            duration: 300, // 0.3 วินาที
+            duration: 300,
             useNativeDriver: true,
           }).start(() => {
             setShowStartPopup(false);
           });
-        }, 1000); // แสดงค้างไว้ 1 วิ
+        }, 1000);
       });
 
       // Clear any existing timer
@@ -176,7 +167,7 @@ export default function GameScreen() {
             return nextIndex;
           });
         }
-      }, 1500); // Same interval as game timer (1.5 seconds)
+      }, 1500);
     } else {
       // Clear clock timer when not in gameplay
       if (clockTimerRef.current) {
@@ -204,19 +195,17 @@ export default function GameScreen() {
   useEffect(() => {
     let timeoutId;
     if (phase === "wave") {
-      // เริ่มต้นการนับถอยหลัง
       setWaveCountdown(5);
 
       const availablePoses = poseStock.filter((p) => p !== currentPose);
       const newPose =
         availablePoses.length > 0
           ? availablePoses[Math.floor(Math.random() * availablePoses.length)]
-          : currentPose;
+          : poseStock[Math.floor(Math.random() * poseStock.length)];
       setCurrentPose(newPose);
       setPoseIndex(0);
       lastScoredPoseRef.current = { poseIndex: -1, timestamp: 0 };
 
-      // สร้าง timer สำหรับนับถอยหลัง
       const countdownInterval = setInterval(() => {
         setWaveCountdown((prev) => {
           if (prev <= 1) {
@@ -227,7 +216,6 @@ export default function GameScreen() {
         });
       }, 1000);
 
-      // หลังจาก 5 วิ ให้เปลี่ยนไปเป็น gameplay
       timeoutId = setTimeout(() => {
         setPoseStack((prev) => [...prev, newPose]);
         setPhase("gameplay");
@@ -246,12 +234,10 @@ export default function GameScreen() {
   // Fixed game timer
   useEffect(() => {
     if (phase === "gameplay") {
-      // Clear any existing timer
       if (gameTimerRef.current) {
         clearInterval(gameTimerRef.current);
       }
 
-      // Start game timer
       gameTimerRef.current = setInterval(() => {
         if (
           !isPausedRef.current &&
@@ -261,21 +247,20 @@ export default function GameScreen() {
           setTimeLeft((prev) => {
             if (prev <= 1) {
               setPhase("gameover");
+              saveUserScore(score);
               return 0;
             }
             return prev - 1;
           });
         }
-      }, 1500); // 1.5 seconds per tick
+      }, 1500);
     } else {
-      // Clear game timer when not in gameplay
       if (gameTimerRef.current) {
         clearInterval(gameTimerRef.current);
         gameTimerRef.current = null;
       }
     }
 
-    // Cleanup
     return () => {
       if (gameTimerRef.current) {
         clearInterval(gameTimerRef.current);
@@ -284,37 +269,81 @@ export default function GameScreen() {
     };
   }, [phase]);
 
+  // Improved capture timer with better error handling
   useEffect(() => {
-    if (phase !== "gameplay") return;
-
-    let intervalId = setInterval(() => {
-      if (
-        phaseRef.current === "gameplay" &&
-        !isPausedRef.current &&
-        !isSettingsRef.current &&
-        timeLeftRef.current > 0
-      ) {
-        captureAndSendPose();
+    if (phase === "gameplay") {
+      if (captureTimerRef.current) {
+        clearInterval(captureTimerRef.current);
       }
-    }, 1500);
+
+      captureTimerRef.current = setInterval(() => {
+        if (
+          phaseRef.current === "gameplay" &&
+          !isPausedRef.current &&
+          !isSettingsRef.current &&
+          timeLeftRef.current > 0 &&
+          isCameraMounted && // Check if camera is mounted
+          isCameraReady
+        ) {
+          captureAndSendPose();
+        }
+      } , 100);
+    } else {
+      if (captureTimerRef.current) {
+        clearInterval(captureTimerRef.current);
+        captureTimerRef.current = null;
+      }
+    }
 
     return () => {
-      clearInterval(intervalId);
+      if (captureTimerRef.current) {
+        clearInterval(captureTimerRef.current);
+        captureTimerRef.current = null;
+      }
       setIsProcessingPose(false);
     };
-  }, [phase]);
+  }, [phase, isCameraMounted, isCameraReady]);
 
-  const captureAndSendPose = async () => {
-    if (isProcessingPose || !cameraRef.current) return;
+  // Improved captureAndSendPose with better error handling and camera state checks
+  const captureAndSendPose = useCallback(async () => {
+    // Enhanced validation checks
+    if (
+      isProcessingPose ||
+      !cameraRef.current ||
+      !isCameraReady ||
+      !isCameraMounted ||
+      phase !== "gameplay" ||
+      isPausedRef.current ||
+      isSettingsRef.current
+    ) {
+      return;
+    }
 
     if (gameplayStartTime && Date.now() - gameplayStartTime < 1000) return;
 
     try {
       setIsProcessingPose(true);
+
+      // Double-check camera state before taking photo
+      if (!cameraRef.current || !isCameraMounted) {
+        console.warn("Camera not available for photo capture");
+        return;
+      }
+
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.7,
+        quality: 0.8,
         skipProcessing: true,
+        exif: false,
+        flash: "off",
       });
+
+      // Check if component is still mounted after async operation
+      if (!isCameraMounted || phase !== "gameplay") {
+        console.warn("Component unmounted during photo capture");
+        return;
+      }
+
+      console.log("Captured photo URI:", photo.uri);
 
       const formData = new FormData();
       formData.append("file", {
@@ -329,12 +358,20 @@ export default function GameScreen() {
       });
 
       const data = await response.json();
+
+      // Check if component is still mounted after API call
+      if (!isCameraMounted || phase !== "gameplay") {
+        console.warn("Component unmounted during API call");
+        return;
+      }
+
       setGestureResult(`Pose: ${data.pose_class} (${data.confidence_score})`);
       setNowPose(data.pose_class);
       setStatus("Pose sent");
 
       if (
         phaseRef.current === "gameplay" &&
+        poseIndexRef.current < poseStackRef.current.length &&
         poseStackRef.current[poseIndexRef.current] === data.pose_class &&
         !(
           lastScoredPoseRef.current.poseIndex === poseIndexRef.current &&
@@ -353,52 +390,72 @@ export default function GameScreen() {
           setScorePopupParticle(scorePopupParticles[randomIndex]);
           setShowScorePopup(true);
 
-          // ปิด popup หลัง 700ms
-          setTimeout(() => {
-            setShowScorePopup(false);
+          Animated.timing(popupOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }).start(() => {
+            setTimeout(() => {
+              Animated.timing(popupOpacity, {
+                toValue: 0,
+                duration: 300,
+                useNativeDriver: true,
+              }).start(() => {
+                setShowScorePopup(false);
 
-            // --- เพิ่มตรงนี้ ---
-            // เปลี่ยน phase หลังจาก popup ปิด (ถ้ามี)
-            if (poseIndexRef.current + 1 >= poseStackRef.current.length) {
-              setPhase("wave"); // ตัวอย่างเปลี่ยน phase หลัง popup ปิด
-            } else {
-              setPoseIndex((prevIndex) => prevIndex + 1);
-              setTimeLeft(5);
-            }
-          }, 700);
+                if (phaseRef.current === "gameplay") {
+                  if (poseIndexRef.current + 1 >= poseStackRef.current.length) {
+                    setPhase("wave");
+                  } else {
+                    setPoseIndex((prevIndex) => prevIndex + 1);
+                    setTimeLeft(5);
+                    setClockIndex(0);
+                  }
+                }
+              });
+            }, 1000);
+          });
 
           return prev + 10;
         });
 
-        setPoseIndex((prev) => {
-          if (prev + 1 < poseStackRef.current.length) {
-            setTimeLeft((t) => Math.min(t + 5, 5));
-            return prev + 1;
-          } else {
-            setPhase("wave");
-            return 0;
-          }
-        });
+        // Save pose image
+        try {
+          const saveFormData = new FormData();
+          saveFormData.append("file", {
+            uri: photo.uri,
+            type: "image/jpeg",
+            name: "correct_pose.jpg",
+          });
+          saveFormData.append("pose_name", data.pose_class);
 
-        const saveFormData = new FormData();
-        saveFormData.append("file", {
-          uri: photo.uri,
-          type: "image/jpeg",
-          name: "correct_pose.jpg",
-        });
-        saveFormData.append("pose_name", data.pose_class);
-
-        await fetch("https://api.ongor.fun/save_pose_image/", {
-          method: "POST",
-          body: saveFormData,
-        });
+          await fetch("https://api.ongor.fun/save_pose_image/", {
+            method: "POST",
+            body: saveFormData,
+          });
+        } catch (saveError) {
+          console.warn("Failed to save pose image:", saveError);
+        }
       }
     } catch (err) {
-      setStatus("Error sending pose");
+      // console.error("Error in captureAndSendPose:", err);
+      // setStatus("Error sending pose");
+
+      // Reset processing state on error
+      setIsProcessingPose(false);
     } finally {
+      // Always reset processing state
       setIsProcessingPose(false);
     }
-  };
+  }, [
+    isProcessingPose,
+    isCameraReady,
+    isCameraMounted,
+    phase,
+    gameplayStartTime,
+    scorePopupParticles,
+    popupOpacity,
+  ]);
 
   const resetGame = () => {
     // Clear all timers
@@ -410,7 +467,12 @@ export default function GameScreen() {
       clearInterval(gameTimerRef.current);
       gameTimerRef.current = null;
     }
+    if (captureTimerRef.current) {
+      clearInterval(captureTimerRef.current);
+      captureTimerRef.current = null;
+    }
 
+    // Reset all states
     setPoseStack([]);
     setPhase("wave");
     setScore(0);
@@ -421,19 +483,42 @@ export default function GameScreen() {
     setTimeLeft(5);
     setWaveCountdown(5);
     setClockIndex(0);
+    setCurrentPose("");
+    setShowScorePopup(false);
+    setShowStartPopup(false);
+    setIsProcessingPose(false);
+    setGameplayStartTime(null);
     lastScoredPoseRef.current = { poseIndex: -1, timestamp: 0 };
   };
 
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
+      setIsCameraMounted(false); // Mark camera as unmounted
       if (clockTimerRef.current) {
         clearInterval(clockTimerRef.current);
       }
       if (gameTimerRef.current) {
         clearInterval(gameTimerRef.current);
       }
+      if (captureTimerRef.current) {
+        clearInterval(captureTimerRef.current);
+      }
     };
+  }, []);
+
+  // Handle camera ready state
+  const handleCameraReady = useCallback(() => {
+    setIsCameraReady(true);
+    setIsCameraMounted(true);
+    console.log("Camera is ready and mounted");
+  }, []);
+
+  // Handle camera mount state changes
+  const handleCameraMountError = useCallback(() => {
+    console.warn("Camera mount error detected");
+    setIsCameraMounted(false);
+    setIsCameraReady(false);
   }, []);
 
   if (!permission) {
@@ -455,9 +540,62 @@ export default function GameScreen() {
     );
   }
 
+  // ฟังก์ชันบันทึกคะแนนรายวัน
+  const saveUserScore = async (score) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const db = getDatabase();
+    const uid = user.uid;
+    const today = new Date().toISOString().split("T")[0];
+    const scoreListRef = ref(db, `user_scores/${uid}/${today}`);
+
+    const session = {
+      score: score,
+      email: user.email || "Unknown",
+      timestamp: new Date().toISOString(),
+    };
+
+    await push(scoreListRef, session);
+    console.log("✅ Score saved for", today, ":", session);
+  };
+
+  const goBackToHome = () => {
+    // หยุดทุก timers ก่อนออกจากหน้า
+    setIsCameraMounted(false); // Mark camera as unmounted
+
+    if (clockTimerRef.current) {
+      clearInterval(clockTimerRef.current);
+      clockTimerRef.current = null;
+    }
+    if (gameTimerRef.current) {
+      clearInterval(gameTimerRef.current);
+      gameTimerRef.current = null;
+    }
+    if (captureTimerRef.current) {
+      clearInterval(captureTimerRef.current);
+      captureTimerRef.current = null;
+    }
+
+    setIsProcessingPose(false);
+    setIsPaused(false);
+    setIsSettings(false);
+
+    router.push("/(tabs)/");
+  };
+
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} facing="front" ref={cameraRef} />
+      <CameraView
+        style={styles.camera}
+        facing="front"
+        ref={cameraRef}
+        onCameraReady={() => setIsCameraReady(true)}
+        flash="off"
+        enableTorch={false}
+        animateShutter={false}
+      />
+
       {showStartPopup && (
         <Animated.View
           style={{
@@ -473,7 +611,7 @@ export default function GameScreen() {
           }}
         >
           <Image
-            source={require("@/assets/workText.png")}
+            source={require("../../assets/workText.png")}
             style={{ width: 600, height: 600 }}
             resizeMode="contain"
           />
@@ -484,10 +622,10 @@ export default function GameScreen() {
         <Animated.View
           style={{
             position: "absolute",
-            top: screenHeight / 2 - 150,
-            left: screenWidth / 2 - 150,
-            width: 300,
-            height: 300,
+            bottom: -80, // ชิดขอบล่าง
+            left: 0, // เริ่มจากซ้ายสุด
+            width: screenWidth, // เต็มความกว้างหน้าจอ
+            height: screenHeight, // เต็มความสูงหน้าจอ
             justifyContent: "center",
             alignItems: "center",
             opacity: popupOpacity,
@@ -497,13 +635,17 @@ export default function GameScreen() {
           {/* พื้นหลัง */}
           <Image
             source={scorePopupParticle.background}
-            style={{ width: 300, height: 300, position: "absolute" }}
+            style={{
+              width: screenWidth,
+              height: screenHeight,
+              position: "absolute",
+            }}
             resizeMode="contain"
           />
           {/* ตัวหนังสือ */}
           <Image
             source={scorePopupParticle.text}
-            style={{ width: 300, height: 300 }}
+            style={{ width: screenWidth, height: screenHeight }}
             resizeMode="contain"
           />
         </Animated.View>
@@ -555,17 +697,19 @@ export default function GameScreen() {
         <Text style={styles.scoreText}>{score}</Text>
         {showScorePopup && <Text style={styles.scorePopupText}>+10</Text>}
       </View> */}
-      <Image
-        source={require("@/assets/Ongor_Normal.png")} // ใส่ path ของรูปสมองคุณตรงนี้
-        style={{
-          position: "absolute",
-          bottom: 20, // ห่างจากขอบล่าง 20px
-          left: -20, // ห่างจากขอบซ้าย 20px
-          width: 160, // ปรับขนาดตามต้องการ
-          height: 160,
-          zIndex: 999999,
-        }}
-      />
+      {(phase === "wave" || phase === "gameplay") && (
+        <Image
+          source={require("../../assets/Ongor_Normal.png")}
+          style={{
+            position: "absolute",
+            bottom: 20,
+            left: -20,
+            width: 160,
+            height: 160,
+            zIndex: 99,
+          }}
+        />
+      )}
 
       {/* Wave Phase */}
       {phase === "wave" && (
@@ -573,7 +717,7 @@ export default function GameScreen() {
           {/* ด่าน */}
           <View style={styles.waveHeader}>
             <Image
-              source={require("@/assets/textWave.png")} // เปลี่ยน path ให้ตรงกับรูปคุณ
+              source={require("../../assets/textWave.png")} // เปลี่ยน path ให้ตรงกับรูปคุณ
               style={styles.stageLabelImage}
               resizeMode="contain"
             />
@@ -677,7 +821,7 @@ export default function GameScreen() {
 
                 {/* กรอบหลังเลขท่าทาง */}
                 <Image
-                  source={require("@/assets/GesturNumber.png")} // เปลี่ยน path ให้ตรงกับรูปกรอบเลขคุณ
+                  source={require("../../assets/GesturNumber.png")} // เปลี่ยน path ให้ตรงกับรูปกรอบเลขคุณ
                   style={styles.poseNumberFrame}
                   resizeMode="contain"
                 />
@@ -917,19 +1061,50 @@ export default function GameScreen() {
 
       {/* Game Over Phase */}
       {phase === "gameover" && (
-        <View style={styles.gameOverContainer}>
-          <Text style={styles.gameOverTitle}>Game Over</Text>
-          <Text style={styles.gameOverStats}>
-            Wave สูงสุด: {poseStack.length + 1}
-          </Text>
-          <Text style={styles.gameOverStats}>
-            ท่าที่ทำสำเร็จ: {poseStack.length}
-          </Text>
-          <Text style={styles.gameOverStats}>คะแนนที่ได้รับ: {score}</Text>
+        <View style={styles.gameOverOverlay}>
+          {/* รูปคำว่า หมดเวลา */}
+          <Image
+            source={require("../../assets/gameOver/overTitle.png")}
+            style={styles.gameOverTitleImage}
+            resizeMode="contain"
+          />
 
-          <TouchableOpacity style={styles.restartButton} onPress={resetGame}>
-            <Text style={styles.restartButtonText}>เริ่มใหม่</Text>
+          {/* กรอบคะแนน + ข้อความในกรอบ */}
+          <View style={styles.scoreContainer}>
+            <Image
+              source={require("../../assets/gameOver/score.png")}
+              style={styles.scoreFrameImage}
+              resizeMode="contain"
+            />
+            <View style={styles.scoreTextWrapper}>
+              <Text style={styles.scoreNumber}>{score}</Text>
+            </View>
+          </View>
+
+          {/* ปุ่มเล่นใหม่ */}
+          <TouchableOpacity onPress={resetGame}>
+            <Image
+              source={require("../../assets/gameOver/tryAgain.png")}
+              style={styles.buttonImage}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
+
+          {/* ปุ่มกลับหน้าเมนู */}
+          <TouchableOpacity onPress={goBackToHome}>
+            <Image
+              source={require("../../assets/gameOver/backtohome.png")}
+              style={styles.buttonImage}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+
+          {/* รูปล่างสุดติดขอบล่างจอ */}
+          <Image
+            source={require("../../assets/gameOver/ongorText.png")}
+            style={styles.bottomDecor}
+            resizeMode="cover"
+          />
         </View>
       )}
 
@@ -1037,7 +1212,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: "white",
     fontSize: 16,
-    fontWeight: "bold",
+    fontFamily: "KanitB",
   },
 
   // สไตล์ใหม่สำหรับ Wave Phase
@@ -1047,7 +1222,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.9)",
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
     justifyContent: "space-between",
     alignItems: "center",
     paddingVertical: 50,
@@ -1060,7 +1235,7 @@ const styles = StyleSheet.create({
   waveStageText: {
     fontSize: 60,
     color: "#4A90E2",
-    fontWeight: "bold",
+    fontFamily: "kanitB",
     textShadowColor: "rgba(0, 0, 0, 0.3)",
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 5,
@@ -1092,7 +1267,7 @@ const styles = StyleSheet.create({
   poseNameText: {
     fontSize: 32,
     color: "#FFFFFF",
-    fontWeight: "bold",
+    fontFamily: "kanitB",
     textAlign: "center",
     textShadowColor: "rgba(0, 0, 0, 0.5)",
     textShadowOffset: { width: 1, height: 1 },
@@ -1104,7 +1279,6 @@ const styles = StyleSheet.create({
   },
   countdownText: {
     fontSize: 120,
-    fontWeight: "bold",
     fontFamily: "starBorn",
     color: "#4A90E2",
     // ไม่ต้องใส่ textShadow เพราะเราใช้การซ้อนแทน
@@ -1133,7 +1307,7 @@ const styles = StyleSheet.create({
   currentPoseText: {
     color: "#FFD600",
     fontSize: 18,
-    fontWeight: "bold",
+    fontFamily: "kanitB",
     textAlign: "center",
   },
   progressText: {
@@ -1141,22 +1315,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 5,
   },
-  gameOverContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
   gameOverTitle: {
     color: "#ff6b6b",
     fontSize: 36,
     marginBottom: 8,
-    fontWeight: "bold",
+    fontFamily: "kanitB",
   },
   gameOverStats: {
     color: "white",
@@ -1173,7 +1336,7 @@ const styles = StyleSheet.create({
   restartButtonText: {
     color: "white",
     fontSize: 18,
-    fontWeight: "bold",
+    fontFamily: "kanitB",
   },
   bottomInfo: {
     position: "absolute",
@@ -1208,7 +1371,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 28,
-    fontWeight: "bold",
+    fontFamily: "kanitB",
     textAlign: "center",
     marginBottom: 20,
   },
@@ -1226,7 +1389,7 @@ const styles = StyleSheet.create({
   modalButtonText: {
     color: "#2563eb",
     fontSize: 16,
-    fontWeight: "bold",
+    fontFamily: "kanitB",
   },
   stroke: {
     color: "white",
@@ -1237,7 +1400,6 @@ const styles = StyleSheet.create({
   },
   waveStageNumberText: {
     fontSize: 100,
-    fontWeight: "bold",
     color: "#fff", // ปรับสีเลขด่านได้
     marginTop: 25,
     fontFamily: "MaliB",
@@ -1250,7 +1412,6 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     fontSize: 24,
-    fontWeight: "bold",
     color: "white",
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -1273,10 +1434,83 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+
   scoreText: {
     color: "white",
     fontSize: 114,
-    fontWeight: "bold",
     fontFamily: "MaliB",
+  },
+
+  gameOverContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff", // หรือพื้นหลังอื่นๆ
+  },
+
+  gameOverTitleImage: {
+    width: 400,
+    height: 220, // ลดขนาดลง
+    marginBottom: 10, // เว้นระยะพอดี
+  },
+
+  scoreFrameImage: {
+    width: "100%",
+    height: "100%",
+    marginTop: -10,
+  },
+
+  scoreTextWrapper: {
+    position: "absolute",
+    top: "20%", // ปรับตำแหน่งให้ "คะแนน" ขึ้นสูงขึ้น
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+
+  scoreTextt: {
+    fontSize: 18,
+    color: "#333",
+    marginBottom: 10,
+  },
+
+  scoreNumber: {
+    fontSize: 40,
+    color: "#fff",
+    top: "120%",
+  },
+
+  buttonImage: {
+    width: 250,
+    height: 70,
+    marginVertical: 10,
+    zIndex: 999999,
+    top: -50,
+  },
+
+  bottomDecor: {
+    position: "absolute",
+    bottom: 0,
+    width: "100%",
+    height: "120",
+    zIndex: 99999,
+  },
+  gameOverOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10, // ทับกล้องแน่นอน
+  },
+  scoreContainer: {
+    width: "80%",
+    height: 200,
+    top: -40,
+    position: "relative",
+    marginVertical: 0, // ไม่ต้องเว้นเยอะ
   },
 });
