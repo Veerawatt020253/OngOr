@@ -1,42 +1,50 @@
 // lib/scoreUtils.js
-import { auth } from "@/FirebaseConfig";
-import { get, getDatabase, ref } from "firebase/database";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { auth, rtdb } from "@/FirebaseConfig"; // ✅ ใช้ rtdb ที่ export มาจริง ๆ
+import { get, ref } from "firebase/database";
+
+const K_POINTS_CACHE = "@ongor:points:total_cache_v1";
 
 /**
- * ดึงคะแนนรวมทั้งหมดของผู้ใช้จาก Firebase Realtime Database
- * @returns {Promise<number>} คะแนนรวมทั้งหมด หรือ 0 ถ้าไม่มีข้อมูล
+ * รวมคะแนนทั้งหมดจาก RTDB:
+ * user_scores/{uid}/{YYYY-MM-DD}/{sessionKey}: { score: number }
+ * - เซฟลง AsyncStorage เป็นแคช
+ * - ถ้า error จะคืนค่าจากแคชแทน
  */
 export const getTotalPoints = async () => {
   try {
     const user = auth.currentUser;
     if (!user) {
-      console.log("No user logged in");
-      return 0;
+      const cached = await AsyncStorage.getItem(K_POINTS_CACHE);
+      return cached ? parseInt(cached, 10) || 0 : 0;
     }
 
-    const db = getDatabase();
     const uid = user.uid;
-    const dbRef = ref(db, `user_scores/${uid}`);
-    const snapshot = await get(dbRef);
+    const snap = await get(ref(rtdb, `user_scores/${uid}`)); // ✅ ใช้ rtdb
 
-    if (!snapshot.exists()) {
-      console.log("No score data found");
+    if (!snap.exists()) {
+      await AsyncStorage.setItem(K_POINTS_CACHE, "0");
       return 0;
     }
 
-    const data = snapshot.val();
-    let totalPoints = 0;
+    const data = snap.val() || {};
+    let total = 0;
 
     Object.values(data).forEach((dayData) => {
+      if (!dayData || typeof dayData !== "object") return;
       Object.values(dayData).forEach((session) => {
-        const score = Number(session.score) || 0;
-        totalPoints += score;
+        if (!session || typeof session !== "object") return;
+        const s = Number(session.score) || 0;
+        total += s;
       });
     });
 
-    return totalPoints;
-  } catch (error) {
-    console.error("Error fetching total points:", error);
-    return 0;
+    total = Math.floor(total);
+    await AsyncStorage.setItem(K_POINTS_CACHE, String(total));
+    return total;
+  } catch (err) {
+    console.log("[getTotalPoints] Error:", err);
+    const cached = await AsyncStorage.getItem(K_POINTS_CACHE);
+    return cached ? parseInt(cached, 10) || 0 : 0;
   }
 };

@@ -1,11 +1,11 @@
 // firebaseConfig.js
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeAuth, getAuth, getReactNativePersistence } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+import { getDatabase } from "firebase/database";
+import { getStorage } from "firebase/storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyA8dseBnpICQMeSn0wSsgfj9ZIXCT2lpN4",
   authDomain: "myneuro-43454.firebaseapp.com",
@@ -13,19 +13,28 @@ const firebaseConfig = {
   projectId: "myneuro-43454",
   storageBucket: "myneuro-43454.firebasestorage.app",
   messagingSenderId: "800080342020",
-  appId: "1:800080342020:web:470151c891dafce1e99951"
+  appId: "1:800080342020:web:470151c891dafce1e99951",
 };
 
-// ✅ ตรวจสอบว่า Firebase ถูก initialize แล้วหรือยัง
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+// ✅ single app
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// ✅ ใช้ initializeAuth() สำหรับ React Native พร้อม AsyncStorage
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+// ✅ Auth (กัน init ซ้ำตอน fast refresh)
+let auth;
+try {
+  auth = initializeAuth(app, { persistence: getReactNativePersistence(AsyncStorage) });
+} catch {
+  auth = getAuth(app);
+}
 
-// Initialize Firebase services
+// ✅ Firestore (คงชื่อ db สำหรับ Firestore)
 export const db = getFirestore(app);
+
+// ✅ Realtime Database: ใช้รูปแบบเดียว "ทุกที่" — ไม่ส่ง URL ซ้ำ
+export const rtdb = getDatabase(app);
+
+// ✅ Storage
 export const storage = getStorage(app);
 
+export { auth };
 export default app;

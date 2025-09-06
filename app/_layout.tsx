@@ -50,8 +50,10 @@ export default function RootLayout() {
             options={{ headerShown: false }}
           />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+         
           <Stack.Screen name="(game)/play" options={{ headerShown: false }} />
           <Stack.Screen name="(game)/game" options={{ headerShown: false }} />
+          <Stack.Screen name="(game)/webgame" options={{ headerShown: false }} />
           <Stack.Screen
             name="(page)/StatusScreen"
             options={{ headerShown: false }}

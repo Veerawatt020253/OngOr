@@ -68,7 +68,8 @@ const PlayScreen = () => {
       setCameraReady(false);
 
       navigationTimeoutRef.current = setTimeout(() => {
-        router.replace("/(game)/game");
+        // router.replace("/(game)/game");
+        router.replace("/(game)/webgame");
       }, 300);
     } catch (error) {
       Alert.alert("Error", "ไม่สามารถเข้าสู่เกมได้");
