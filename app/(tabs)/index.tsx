@@ -1,5 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useRef, useState, useEffect } from "react";
+import * as Notifications from "expo-notifications"; // ⬅️ เพิ่ม import
 import {
   Animated,
   Easing,
@@ -299,6 +300,7 @@ export default function HomeScreen() {
             <Text style={styles.settingText}>ตั้งค่าแอปพลิเคชัน</Text>
           </TouchableOpacity>
         )}
+
       </ScrollView>
 
       {/* Overlay โหลดรวม (glass) */}

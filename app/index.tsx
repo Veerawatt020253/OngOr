@@ -1,64 +1,46 @@
+// index.tsx
 import { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Button,
-  StyleSheet,
-  ActivityIndicator,
-} from "react-native";
-import { useRouter } from "expo-router";
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// component
+import { View, ActivityIndicator, StyleSheet } from "react-native";
+import { Redirect } from "expo-router";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/FirebaseConfig";
 import OnboardingScreen from "./onBoardingScreen";
+import { usePushToken } from "@/lib/usePushToken";
 
-export default function index() {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
+export default function Index() {
+  const [checked, setChecked] = useState(false);
+  const [route, setRoute] = useState<"/(auth)/verify-email" | "/(tabs)" | null>(
+    null
+  );
+
+  const token = usePushToken(); // ✅ ดึง token ที่นี่เลย
 
   useEffect(() => {
-    const getData = async () => {
-      try {
-        const value = await AsyncStorage.getItem("email"); // 🔹 Use "email" (correct key)
-        if (value !== null) {
-          console.log("User is logged in:", value);
-          router.push("/(tabs)")
-        } else {
-          console.log("No user found.");
-        }
-      } catch (e) {
-        console.error("Error reading value:", e);
-      } finally {
-        setLoading(false); //  Ensure `setLoading` runs
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        if (user.emailVerified) setRoute("/(tabs)");
+        else setRoute("/(auth)/verify-email");
       }
-    };
-
-    getData(); //  Call the function inside useEffect
+      setChecked(true);
+    });
+    return () => unsub();
   }, []);
 
-  if (loading) {
+  if (!checked) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#3578d0" />
       </View>
     );
   }
 
-  return (
-    <OnboardingScreen />
-  );
+  if (route) {
+    return <Redirect href={route} />;
+  }
+
+  return <OnboardingScreen />;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    marginHorizontal: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  loading: { flex: 1, justifyContent: "center", alignItems: "center" },
 });

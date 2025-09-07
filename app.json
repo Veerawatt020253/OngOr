@@ -5,11 +5,14 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/Logo/LogoRound.png",
+    "owner": "nice2250",
     "userInterfaceStyle": "light",
     "scheme": "ongor",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ongor.fun",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "adaptiveIcon": {
@@ -51,7 +54,8 @@
           "recordAudioAndroid": true
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
@@ -60,6 +64,9 @@
       "router": {},
       "eas": {
         "projectId": "5638b405-59a2-48ed-aa55-14aec6da9dde"
+      },
+      "google": {
+        "webClientId": "800080342020-iq03he55phpkk5rs5bmsvk2pc0s8huni.apps.googleusercontent.com"
       }
     }
   }
