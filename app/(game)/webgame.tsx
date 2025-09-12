@@ -7,6 +7,7 @@ import {
   StatusBar,
   Linking,
   Platform,
+  BackHandler,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Camera } from "expo-camera";
@@ -42,6 +43,7 @@ export default function WebGame() {
 
   const [webLoaded, setWebLoaded] = useState(false);
   const [gameReady, setGameReady] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
 
   const [gameOver, setGameOver] = useState(false);
   const [gameOverData, setGameOverData] = useState<{
@@ -148,11 +150,40 @@ export default function WebGame() {
     ensureCamera();
   }, []);
 
+  // ✅ เพิ่ม timeout สำหรับการโหลด
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!gameReady) {
+        setLoadingTimeout(true);
+        console.log("Loading timeout - game not ready");
+      }
+    }, 30000); // 30 วินาที
+
+    return () => clearTimeout(timer);
+  }, [gameReady, webKey]);
+
+  // ✅ จัดการ back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (gameOver) {
+        setGameOver(false);
+        return true;
+      }
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [gameOver]);
+
   // helper: ส่ง message ไปหน้าเว็บ
   const postToWeb = useCallback((msg: any) => {
     const js = `
-      if (window.fromRN) {
-        window.fromRN(${JSON.stringify(msg)});
+      try {
+        if (window.fromRN) {
+          window.fromRN(${JSON.stringify(msg)});
+        }
+      } catch (e) {
+        console.error('postToWeb error:', e);
       }
       true;
     `;
@@ -165,23 +196,31 @@ export default function WebGame() {
       let data: WebMsg | null = null;
       try {
         data = JSON.parse(e.nativeEvent.data);
-      } catch {}
+        console.log("Received message from web:", data);
+      } catch (err) {
+        console.log("Message parse error:", err);
+        return;
+      }
       if (!data) return;
 
       switch (data.type) {
         case "GAME_READY":
+          console.log("Game ready received");
           setGameReady(true);
+          setLoadingTimeout(false);
           // ส่ง INIT กลับไป (ข้อมูลผู้ใช้/ระดับความยาก ปรับได้)
-          postToWeb({
-            type: "INIT",
-            payload: {
-              username: auth.currentUser?.displayName || "Guest",
-              ig: "ongor_team",
-              email: auth.currentUser?.email || "guest@example.com",
-              uid: auth.currentUser?.uid || "uid_guest", // ✅ ใช้ uid จริง
-              difficulty: "normal",
-            },
-          });
+          setTimeout(() => {
+            postToWeb({
+              type: "INIT",
+              payload: {
+                username: auth.currentUser?.displayName || "Guest",
+                ig: "ongor_team",
+                email: auth.currentUser?.email || "guest@example.com",
+                uid: auth.currentUser?.uid || "uid_guest", // ✅ ใช้ uid จริง
+                difficulty: "normal",
+              },
+            });
+          }, 100);
           break;
 
         case "GAME_OVER":
@@ -203,26 +242,64 @@ export default function WebGame() {
           break;
 
         default:
+          console.log("Unknown message type:", data.type);
           break;
       }
     },
     [postToWeb, saveScore]
   );
 
+  // ✅ ปรับ CSS ให้เหมาะกับ Android
   const injectedCSS = `
-    html, body { margin:0!important; padding:0!important; background:#000!important; overflow:hidden!important; }
+    html, body { 
+      margin:0!important; 
+      padding:0!important; 
+      background:#000!important; 
+      overflow:hidden!important;
+      width:100vw!important;
+      height:100vh!important;
+    }
     ::-webkit-scrollbar { display:none!important; width:0!important; height:0!important; }
     header, nav, footer, .navbar, .site-header, .site-footer, [role="banner"], [role="navigation"] {
       display:none!important; height:0!important; overflow:hidden!important; visibility:hidden!important;
     }
-    * { -webkit-touch-callout:none!important; -webkit-user-select:none!important; user-select:none!important; }
-    video{ background:#000!important; }
-  `.replace(/\n/g, "");
+    * { 
+      -webkit-touch-callout:none!important; 
+      -webkit-user-select:none!important; 
+      user-select:none!important;
+      box-sizing:border-box!important;
+    }
+    video { 
+      background:#000!important; 
+      width:100%!important;
+      height:100%!important;
+      object-fit:cover!important;
+    }
+    canvas {
+      width:100%!important;
+      height:100%!important;
+    }
+  `.replace(/\n\s+/g, " ");
+
   const injectedBeforeLoad = `
     (function(){
-      var s=document.createElement('style'); s.type='text/css';
-      s.appendChild(document.createTextNode('${injectedCSS}'));
+      console.log('Injecting CSS and setup...');
+      var s=document.createElement('style'); 
+      s.type='text/css';
+      s.innerHTML = \`${injectedCSS}\`;
       document.head.appendChild(s);
+      
+      // ✅ เพิ่ม debug logging
+      window.addEventListener('error', function(e) {
+        console.error('Window error:', e.error);
+      });
+      
+      // ✅ เช็ค WebRTC สำหรับกล้อง
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        console.warn('getUserMedia not supported');
+      }
+      
+      console.log('Setup complete');
     })();
     true;
   `;
@@ -232,12 +309,39 @@ export default function WebGame() {
     setGameOverData(null);
     setGameReady(false);
     setWebLoaded(false);
+    setLoadingTimeout(false);
     setWebKey((k) => k + 1); // reload WebView
   };
 
   const handleGoHome = () => {
     setGameOver(false);
     // navigation.navigate("Home");
+  };
+
+  const handleRetry = () => {
+    setLoadingTimeout(false);
+    setGameReady(false);
+    setWebLoaded(false);
+    setWebKey((k) => k + 1);
+  };
+
+  // ✅ เพิ่ม error handling
+  const onError = (syntheticEvent: any) => {
+    const { nativeEvent } = syntheticEvent;
+    console.error('WebView error:', nativeEvent);
+    Alert.alert(
+      "เกิดข้อผิดพลาด",
+      "ไม่สามารถโหลดเกมได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต",
+      [
+        { text: "ลองใหม่", onPress: handleRetry },
+        { text: "ยกเลิก", style: "cancel" }
+      ]
+    );
+  };
+
+  const onHttpError = (syntheticEvent: any) => {
+    const { nativeEvent } = syntheticEvent;
+    console.warn('WebView HTTP error:', nativeEvent);
   };
 
   return (
@@ -249,8 +353,16 @@ export default function WebGame() {
           ref={webRef}
           source={{ uri: GAME_URL }}
           onMessage={onMessage}
-          onLoadStart={() => setWebLoaded(false)}
-          onLoadEnd={() => setWebLoaded(true)}
+          onLoadStart={() => {
+            console.log("WebView load start");
+            setWebLoaded(false);
+          }}
+          onLoadEnd={() => {
+            console.log("WebView load end");
+            setWebLoaded(true);
+          }}
+          onError={onError}
+          onHttpError={onHttpError}
           javaScriptEnabled
           domStorageEnabled
           scrollEnabled={false}
@@ -264,15 +376,36 @@ export default function WebGame() {
           setSupportMultipleWindows={false}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
-          userAgent="OngOrApp/1.0 (RN-WebView)"
+          // ✅ ปรับ user agent สำหรับ Android
+          userAgent={`OngOrApp/1.0 (${Platform.OS}; RN-WebView) AppleWebKit/537.36`}
           injectedJavaScriptBeforeContentLoaded={injectedBeforeLoad}
+          // ✅ เพิ่ม mixed content สำหรับ Android
+          mixedContentMode="always"
+          // ✅ เพิ่ม hardware acceleration
+          androidHardwareAccelerationDisabled={false}
+          // ✅ เพิ่ม layer type
+          androidLayerType="hardware"
           style={styles.webview}
           containerStyle={styles.webviewContainer}
         />
 
-        {(!webLoaded || !gameReady) && (
+        {(!webLoaded || (!gameReady && !loadingTimeout)) && (
           <View style={styles.splash}>
             <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
+
+        {loadingTimeout && (
+          <View style={styles.splash}>
+            <View style={styles.timeoutContainer}>
+              <ActivityIndicator size="large" color="#fff" style={{marginBottom: 20}} />
+              <Text style={styles.timeoutText}>
+                การโหลดใช้เวลานานกว่าปกติ
+              </Text>
+              <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+                <Text style={styles.retryButtonText}>ลองใหม่</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -299,5 +432,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
+  },
+  timeoutContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+  timeoutText: {
+    color: "#fff",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: "#007AFF",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });

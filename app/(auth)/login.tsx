@@ -4,10 +4,9 @@ import { useRouter } from "expo-router";
 import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
+  sendEmailVerification,
 } from "firebase/auth";
-import { sendEmailVerification } from "firebase/auth";
-import { useEffect, useRef, useState } from "react";
-
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,13 +20,28 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { auth } from "@/FirebaseConfig";
 
-const router = useRouter();
+/* ---------- responsive helpers (base width 390, base height 844) ---------- */
+function makeScalers(width: number, height: number, fontScale: number) {
+  const BASE_W = 390;
+  const BASE_H = 844;
+  const s = Math.min(width / BASE_W, 1.35);
+  const vs = Math.min(height / BASE_H, 1.35);
+  const scale = (n: number) => Math.round(n * s);
+  const vscale = (n: number) => Math.round(n * vs);
+  const fscale = (n: number) => Math.round((n * s) / Math.max(fontScale, 1));
+  return { scale, vscale, fscale };
+}
 
-/* ========= Floating Label Input (with icons & error) ========= */
+/* ========= Floating Label Input (moved OUTSIDE to keep identity stable) ========= */
 function FloatingLabelInput({
   placeholder,
   value,
@@ -40,6 +54,10 @@ function FloatingLabelInput({
   autoCapitalize = "none",
   returnKeyType,
   onSubmitEditing,
+  styles,
+  scale,
+  vscale,
+  fscale,
 }: {
   placeholder: string;
   value: string;
@@ -52,6 +70,10 @@ function FloatingLabelInput({
   autoCapitalize?: "none" | "words" | "sentences" | "characters";
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
   onSubmitEditing?: () => void;
+  styles: ReturnType<typeof StyleSheet.create>;
+  scale: (n: number) => number;
+  vscale: (n: number) => number;
+  fscale: (n: number) => number;
 }) {
   const [isFocused, setIsFocused] = useState(false);
   const animatedLabel = useRef(new Animated.Value(value ? 1 : 0)).current;
@@ -65,7 +87,7 @@ function FloatingLabelInput({
   }, [isFocused, value]);
 
   return (
-    <View style={{ width: "100%", marginTop: 14 }}>
+    <View style={{ width: "100%", marginTop: vscale(14) }}>
       <View
         style={[
           styles.inputContainer,
@@ -83,14 +105,14 @@ function FloatingLabelInput({
             {
               top: animatedLabel.interpolate({
                 inputRange: [0, 1],
-                outputRange: [18, 5],
+                outputRange: [vscale(18), vscale(5)],
               }),
               fontSize: animatedLabel.interpolate({
                 inputRange: [0, 1],
-                outputRange: [16, 13],
-              }),
+                outputRange: [fscale(16), fscale(13)],
+              }) as any,
               color: error ? "#ef4444" : isFocused ? "#2423ff" : "#9aa3b2",
-              left: leftIcon ? 44 : 16,
+              left: leftIcon ? scale(44) : scale(16),
             },
           ]}
         >
@@ -101,8 +123,8 @@ function FloatingLabelInput({
           style={[
             styles.input,
             {
-              paddingLeft: leftIcon ? 44 : 16,
-              paddingRight: rightElement ? 44 : 16,
+              paddingLeft: leftIcon ? scale(44) : scale(16),
+              paddingRight: rightElement ? scale(44) : scale(16),
             },
           ]}
           value={value}
@@ -130,6 +152,20 @@ function FloatingLabelInput({
 const Login = () => {
   const router = useRouter();
 
+  // --- safe area + responsive env ---
+  const insets = useSafeAreaInsets();
+  const { width, height, fontScale } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
+
+  const { scale, vscale, fscale } = useMemo(
+    () => makeScalers(width, height, fontScale),
+    [width, height, fontScale]
+  );
+
+  // เว้นระยะด้านบนให้พ้นแถบระบบ/รอยบากเสมอ
+  const TOP_GAP = Math.max(insets.top, 12);
+
+  // ---------------- state ----------------
   const [mail, setMail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -139,6 +175,206 @@ const Login = () => {
   // per-field errors
   const [errMail, setErrMail] = useState<string | null>(null);
   const [errPwd, setErrPwd] = useState<string | null>(null);
+
+  // ---------- styles (dynamic per screen + safe area) ----------
+  const styles = useMemo(() => {
+    const CARD_MAX = isTablet ? scale(620) : scale(540);
+    const H_PADDING = isTablet ? scale(22) : scale(16);
+
+    return StyleSheet.create({
+      container: {
+        flex: 1,
+        backgroundColor: "#EEF4FF",
+        alignItems: "center",
+        paddingHorizontal: H_PADDING,
+        paddingTop: TOP_GAP + vscale(44),
+        paddingBottom: vscale(24),
+      },
+      decorationWrap: {
+        position: "absolute",
+        top: TOP_GAP * 0.3,
+        left: 0,
+        right: 0,
+        height: vscale(170),
+      },
+      decoBlob: {
+        position: "absolute",
+        backgroundColor: "#3578d0",
+        borderRadius: 999,
+        transform: [{ rotate: "25deg" }],
+      },
+      backButton: {
+        position: "absolute",
+        top: TOP_GAP,
+        left: scale(12),
+        zIndex: 10,
+        backgroundColor: "#ffffff",
+        padding: scale(8),
+        borderRadius: 999,
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 6,
+        elevation: 2,
+      },
+      logo: {
+        width: isTablet ? scale(180) : scale(140),
+        height: isTablet ? scale(180) : scale(140),
+        marginTop: vscale(12) + TOP_GAP * 0.2,
+      },
+      title: {
+        fontSize: fscale(isTablet ? 30 : 28),
+        marginTop: vscale(6),
+        color: "#2423ff",
+        fontFamily: "kanitB",
+        textAlign: "center",
+      },
+      subtitle: {
+        fontSize: fscale(14),
+        color: "#3b6fb6",
+        fontFamily: "kanitM",
+        marginTop: vscale(2),
+        marginBottom: vscale(12),
+      },
+      card: {
+        width: "100%",
+        maxWidth: CARD_MAX,
+        backgroundColor: "#FFFFFF",
+        borderRadius: scale(20),
+        paddingHorizontal: scale(16),
+        paddingVertical: vscale(18),
+        borderWidth: 1,
+        borderColor: "#D8E6FF",
+        shadowColor: "#3578d0",
+        shadowOpacity: 0.07,
+        shadowOffset: { width: 0, height: 10 },
+        shadowRadius: 18,
+        elevation: 2,
+        alignSelf: "center",
+      },
+      inputContainer: {
+        width: "100%",
+        borderWidth: 1.5,
+        borderRadius: scale(14),
+        paddingTop: vscale(16),
+        paddingBottom: vscale(8),
+        position: "relative",
+      },
+      floatingLabel: {
+        position: "absolute",
+        backgroundColor: "white",
+        paddingHorizontal: scale(8),
+        fontFamily: "kanitM",
+      },
+      input: {
+        fontSize: fscale(16),
+        paddingVertical: vscale(10),
+        width: "100%",
+        fontFamily: "kanitM",
+        color: "#0F2B56",
+      },
+      leftIconWrap: {
+        position: "absolute",
+        left: scale(14),
+        top: vscale(14),
+        width: scale(22),
+        height: scale(22),
+        alignItems: "center",
+        justifyContent: "center",
+      },
+      rightElementWrap: {
+        position: "absolute",
+        right: scale(12),
+        top: vscale(12),
+        width: scale(24),
+        height: scale(24),
+        alignItems: "center",
+        justifyContent: "center",
+      },
+      errorText: {
+        color: "#ef4444",
+        marginTop: vscale(6),
+        fontSize: fscale(12),
+        fontFamily: "kanitM",
+      },
+      rowBetween: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginTop: vscale(10),
+      },
+      rememberWrap: { flexDirection: "row", alignItems: "center", gap: scale(8) },
+      checkbox: {
+        width: scale(18),
+        height: scale(18),
+        borderRadius: scale(4),
+        borderWidth: 1.5,
+        borderColor: "#b9c7dd",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "#fff",
+      },
+      checkboxChecked: { backgroundColor: "#2423ff", borderColor: "#2423ff" },
+      rememberText: { color: "#355b8a", fontFamily: "kanitM", fontSize: fscale(13) },
+      forgotText: {
+        color: "#2423ff",
+        fontFamily: "kanitB",
+        fontSize: fscale(13),
+        textDecorationLine: "underline",
+      },
+      submit: {
+        backgroundColor: "#2423ff",
+        marginTop: vscale(16),
+        paddingVertical: vscale(12),
+        borderRadius: scale(14),
+        alignItems: "center",
+        shadowColor: "#2423ff",
+        shadowOpacity: 0.25,
+        shadowOffset: { width: 0, height: 6 },
+        shadowRadius: 10,
+        elevation: 3,
+      },
+      submitText: { color: "#fff", fontSize: fscale(16), fontFamily: "kanitB" },
+      registerContainer: {
+        flexDirection: "row",
+        marginTop: vscale(8),
+        alignSelf: "center",
+      },
+      registerText: { fontSize: fscale(14), color: "#5878a6", fontFamily: "kanitM" },
+      registerLink: {
+        fontSize: fscale(14),
+        color: "#2423ff",
+        fontFamily: "kanitB",
+        textDecorationLine: "underline",
+      },
+      underline: {
+        width: "92%",
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: "#e6eeff",
+        alignSelf: "center",
+        marginTop: vscale(18),
+      },
+      scrollContent: {
+        flexGrow: 1,
+        minHeight: height,
+        paddingBottom: vscale(16),
+      },
+      decoBlobA: {
+        top: -vscale(40),
+        left: -scale(30),
+        width: scale(160),
+        height: scale(160),
+        opacity: 0.25,
+      },
+      decoBlobB: {
+        top: vscale(40),
+        right: -scale(50),
+        width: scale(220),
+        height: scale(220),
+        opacity: 0.16,
+      },
+    });
+  }, [width, height, fontScale, scale, vscale, fscale, isTablet, TOP_GAP]);
 
   useEffect(() => {
     (async () => {
@@ -175,7 +411,6 @@ const Login = () => {
     try {
       setBusy(true);
 
-      // ล็อกอิน
       const cred = await signInWithEmailAndPassword(
         auth,
         mail.trim().toLowerCase(),
@@ -183,7 +418,6 @@ const Login = () => {
       );
       const user = cred.user;
 
-      // จำอีเมล (หรือเคลียร์) ให้เป็นชุดเดียวกัน
       if (rememberEmail) {
         await AsyncStorage.multiSet([
           ["email", mail.trim().toLowerCase()],
@@ -191,30 +425,22 @@ const Login = () => {
         ]);
       } else {
         await AsyncStorage.multiRemove(["email", "@rememberEmail"]);
-        // เก็บสถานะเผื่อ logic อื่น ๆ อ้างอิง
         await AsyncStorage.setItem("@rememberEmail", "0");
       }
 
-      // ถ้ายังไม่ยืนยันอีเมล → ส่งอีเมลยืนยัน + พาไปหน้า verify
       if (!user.emailVerified) {
         try {
           await sendEmailVerification(user);
         } catch (e) {
-          // เงียบ ๆ ไว้ (บางครั้งโดน throttle) ให้ไปกด "ส่งอีกครั้ง" ในหน้าตรวจได้
           console.log("sendEmailVerification error:", e);
         }
-        Alert.alert(
-          "ต้องยืนยันอีเมล",
-          "เราได้ส่งลิงก์ยืนยันไปที่อีเมลของคุณแล้ว"
-        );
+        Alert.alert("ต้องยืนยันอีเมล", "เราได้ส่งลิงก์ยืนยันไปที่อีเมลของคุณแล้ว");
         router.replace("/(auth)/verify-email");
-        return; // อย่าเข้าแอปก่อน
+        return;
       }
 
-      // ยืนยันแล้ว → เข้าแอป
       router.replace("/(tabs)");
     } catch (error: any) {
-      // แปล error code เป็นข้อความไทยอ่านง่าย
       let msg = "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
       switch (error?.code) {
         case "auth/invalid-email":
@@ -262,47 +488,29 @@ const Login = () => {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(TOP_GAP, 60) : 0}
       >
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-          <SafeAreaView style={styles.container}>
-            {/* โทนตกแต่งพื้นหลังให้อยู่ในธีม */}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+            {/* BG Decorations */}
             <View style={styles.decorationWrap}>
-              <View
-                style={[
-                  styles.decoBlob,
-                  {
-                    top: -40,
-                    left: -30,
-                    width: 160,
-                    height: 160,
-                    opacity: 0.25,
-                  },
-                ]}
-              />
-              <View
-                style={[
-                  styles.decoBlob,
-                  {
-                    top: 40,
-                    right: -50,
-                    width: 220,
-                    height: 220,
-                    opacity: 0.16,
-                  },
-                ]}
-              />
+              <View style={[styles.decoBlob, styles.decoBlobA]} />
+              <View style={[styles.decoBlob, styles.decoBlobB]} />
             </View>
 
             {/* Back */}
             <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>
-              <Ionicons name="arrow-back" size={22} color="#0F2B56" />
+              <Ionicons name="arrow-back" size={scale(22)} color="#0F2B56" />
             </TouchableOpacity>
 
             {/* Logo */}
             <Image
               source={{ uri: "https://img2.pic.in.th/pic/LogoRound.png" }}
               style={styles.logo}
+              resizeMode="contain"
             />
 
             {/* Title */}
@@ -317,10 +525,14 @@ const Login = () => {
                 onChangeText={setMail}
                 keyboardType="email-address"
                 leftIcon={
-                  <Ionicons name="mail-outline" size={18} color="#8aa0c2" />
+                  <Ionicons name="mail-outline" size={scale(18)} color="#8aa0c2" />
                 }
                 error={errMail}
                 returnKeyType="next"
+                styles={styles}
+                scale={scale}
+                vscale={vscale}
+                fscale={fscale}
               />
 
               <FloatingLabelInput
@@ -329,17 +541,13 @@ const Login = () => {
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
                 leftIcon={
-                  <Ionicons
-                    name="lock-closed-outline"
-                    size={18}
-                    color="#8aa0c2"
-                  />
+                  <Ionicons name="lock-closed-outline" size={scale(18)} color="#8aa0c2" />
                 }
                 rightElement={
                   <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
                     <Ionicons
                       name={showPassword ? "eye-off-outline" : "eye-outline"}
-                      size={20}
+                      size={scale(20)}
                       color="#8aa0c2"
                     />
                   </TouchableOpacity>
@@ -347,6 +555,10 @@ const Login = () => {
                 error={errPwd}
                 returnKeyType="go"
                 onSubmitEditing={handleLogin}
+                styles={styles}
+                scale={scale}
+                vscale={vscale}
+                fscale={fscale}
               />
 
               {/* Remember / Forgot */}
@@ -363,15 +575,13 @@ const Login = () => {
                     ]}
                   >
                     {rememberEmail && (
-                      <Ionicons name="checkmark" size={14} color="#fff" />
+                      <Ionicons name="checkmark" size={scale(14)} color="#fff" />
                     )}
                   </View>
                   <Text style={styles.rememberText}>จำอีเมลไว้</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => router.push("/(auth)/forgot-password")}
-                >
+                <TouchableOpacity onPress={() => router.push("/(auth)/forgot-password")}>
                   <Text style={styles.forgotText}>ลืมรหัสผ่าน?</Text>
                 </TouchableOpacity>
               </View>
@@ -384,13 +594,7 @@ const Login = () => {
                 activeOpacity={0.9}
               >
                 {busy ? (
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <ActivityIndicator color="#fff" />
                     <Text style={styles.submitText}>กำลังเข้าสู่ระบบ...</Text>
                   </View>
@@ -405,9 +609,7 @@ const Login = () => {
               {/* Register */}
               <View style={styles.registerContainer}>
                 <Text style={styles.registerText}>ยังไม่มีบัญชี? </Text>
-                <TouchableOpacity
-                  onPress={() => router.push("/(auth)/register")}
-                >
+                <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
                   <Text style={styles.registerLink}>สมัครเลย</Text>
                 </TouchableOpacity>
               </View>
@@ -420,180 +622,3 @@ const Login = () => {
 };
 
 export default Login;
-
-/* ======================== Styles ======================== */
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#EEF4FF",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
-  },
-  decorationWrap: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 160,
-  },
-  decoBlob: {
-    position: "absolute",
-    backgroundColor: "#3578d0",
-    borderRadius: 999,
-    transform: [{ rotate: "25deg" }],
-  },
-  backButton: {
-    position: "absolute",
-    top: 18,
-    left: 14,
-    zIndex: 10,
-    backgroundColor: "#ffffff",
-    padding: 8,
-    borderRadius: 999,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  logo: { width: 140, height: 140, marginTop: 12 },
-  title: {
-    fontSize: 28,
-    marginTop: 6,
-    color: "#2423ff",
-    fontFamily: "kanitB",
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#3b6fb6",
-    fontFamily: "kanitM",
-    marginTop: 2,
-    marginBottom: 12,
-  },
-
-  card: {
-    width: "100%",
-    maxWidth: 540,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    borderWidth: 1,
-    borderColor: "#D8E6FF",
-    shadowColor: "#3578d0",
-    shadowOpacity: 0.07,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 2,
-  },
-
-  inputContainer: {
-    width: "100%",
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingTop: 16,
-    paddingBottom: 8,
-    position: "relative",
-  },
-  floatingLabel: {
-    position: "absolute",
-    backgroundColor: "white",
-    paddingHorizontal: 8,
-    fontFamily: "kanitM",
-  },
-  input: {
-    fontSize: 16,
-    paddingVertical: 10,
-    width: "100%",
-    fontFamily: "kanitM",
-    color: "#0F2B56",
-  },
-  leftIconWrap: {
-    position: "absolute",
-    left: 14,
-    top: 14,
-    width: 22,
-    height: 22,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rightElementWrap: {
-    position: "absolute",
-    right: 12,
-    top: 12,
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  errorText: {
-    color: "#ef4444",
-    marginTop: 6,
-    fontSize: 12,
-    fontFamily: "kanitM",
-  },
-
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 10,
-  },
-  rememberWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: "#b9c7dd",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fff",
-  },
-  checkboxChecked: { backgroundColor: "#2423ff", borderColor: "#2423ff" },
-  rememberText: { color: "#355b8a", fontFamily: "kanitM", fontSize: 13 },
-  forgotText: {
-    color: "#2423ff",
-    fontFamily: "kanitB",
-    fontSize: 13,
-    textDecorationLine: "underline",
-  },
-
-  submit: {
-    backgroundColor: "#2423ff",
-    marginTop: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    shadowColor: "#2423ff",
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  submitText: { color: "#fff", fontSize: 16, fontFamily: "kanitB" },
-
-  registerContainer: {
-    flexDirection: "row",
-    marginTop: 8,
-    alignSelf: "center",
-  },
-  registerText: { fontSize: 14, color: "#5878a6", fontFamily: "kanitM" },
-  registerLink: {
-    fontSize: 14,
-    color: "#2423ff",
-    fontFamily: "kanitB",
-    textDecorationLine: "underline",
-  },
-  underline: {
-    width: "90%",
-    height: 1,
-    backgroundColor: "#e6eeff",
-    alignSelf: "center",
-    marginTop: 18,
-  },
-});

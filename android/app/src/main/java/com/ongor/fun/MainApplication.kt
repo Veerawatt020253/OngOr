@@ -1,4 +1,4 @@
-package com.ongor
+package com.ongor.`fun`
 
 import android.app.Application
 import android.content.res.Configuration

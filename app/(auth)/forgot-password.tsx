@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -12,14 +12,145 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/FirebaseConfig";
+
+/* ---------- responsive helpers (base width 390, base height 844) ---------- */
+function makeScalers(width: number, height: number, fontScale: number) {
+  const BASE_W = 390;
+  const BASE_H = 844;
+  const s = Math.min(width / BASE_W, 1.35);
+  const vs = Math.min(height / BASE_H, 1.35);
+  const scale = (n: number) => Math.round(n * s);
+  const vscale = (n: number) => Math.round(n * vs);
+  const fscale = (n: number) => Math.round((n * s) / Math.max(fontScale, 1));
+  return { scale, vscale, fscale };
+}
 
 /* ======================== Forgot Password Screen ======================== */
 const ForgotPassword = () => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width, height, fontScale } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600;
+
+  const { scale, vscale, fscale } = useMemo(
+    () => makeScalers(width, height, fontScale),
+    [width, height, fontScale]
+  );
+
+  const TOP_GAP = Math.max(insets.top, 12); // กันชนแถบระบบ iOS
+
+  const styles = useMemo(() => {
+    const CARD_MAX = isTablet ? scale(620) : scale(520);
+    const H_PADDING = isTablet ? scale(22) : scale(16);
+
+    return StyleSheet.create({
+      container: {
+        flex: 1,
+        backgroundColor: "#EEF4FF",
+        alignItems: "center",
+        paddingHorizontal: H_PADDING,
+        paddingTop: TOP_GAP + vscale(44), // ขยับลงตาม safe-area
+        paddingBottom: vscale(24),
+      },
+      backButton: {
+        position: "absolute",
+        top: TOP_GAP, // ปุ่มไม่ชนแถบระบบ
+        left: scale(14),
+        zIndex: 10,
+        backgroundColor: "#ffffff",
+        padding: scale(8),
+        borderRadius: 999,
+        shadowColor: "#000",
+        shadowOpacity: 0.06,
+        shadowOffset: { width: 0, height: 2 },
+        shadowRadius: 6,
+        elevation: 2,
+      },
+      logo: {
+        width: isTablet ? scale(160) : scale(120),
+        height: isTablet ? scale(160) : scale(120),
+        marginTop: vscale(12) + TOP_GAP * 0.2,
+      },
+      title: {
+        fontSize: fscale(isTablet ? 28 : 26),
+        marginTop: vscale(8),
+        color: "#2423ff",
+        fontFamily: "kanitB",
+        textAlign: "center",
+      },
+      subtitle: {
+        fontSize: fscale(14),
+        color: "#3b6fb6",
+        fontFamily: "kanitM",
+        marginTop: vscale(6),
+        marginBottom: vscale(16),
+        textAlign: "center",
+        paddingHorizontal: scale(20),
+      },
+      card: {
+        width: "100%",
+        maxWidth: CARD_MAX,
+        backgroundColor: "#FFFFFF",
+        borderRadius: scale(20),
+        paddingHorizontal: scale(16),
+        paddingVertical: vscale(18),
+        borderWidth: 1,
+        borderColor: "#D8E6FF",
+        shadowColor: "#3578d0",
+        shadowOpacity: 0.07,
+        shadowOffset: { width: 0, height: 10 },
+        shadowRadius: 18,
+        elevation: 2,
+        alignSelf: "center",
+      },
+      inputContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        borderWidth: 1.5,
+        borderRadius: scale(14),
+        borderColor: "#dfe5ef",
+        backgroundColor: "#fff",
+        paddingHorizontal: scale(12),
+        paddingVertical: vscale(8),
+        marginBottom: vscale(18),
+      },
+      input: {
+        flex: 1,
+        fontSize: fscale(16),
+        fontFamily: "kanitM",
+        color: "#0F2B56",
+      },
+      submit: {
+        backgroundColor: "#2423ff",
+        marginTop: vscale(6),
+        paddingVertical: vscale(12),
+        borderRadius: scale(14),
+        alignItems: "center",
+        shadowColor: "#2423ff",
+        shadowOpacity: 0.25,
+        shadowOffset: { width: 0, height: 6 },
+        shadowRadius: 10,
+        elevation: 3,
+      },
+      submitText: { color: "#fff", fontSize: fscale(16), fontFamily: "kanitB" },
+      // ให้คอนเทนต์ยืดอย่างน้อยเท่าความสูง เพื่อคงกลางหน้าจอ (แนวนอน/แท็บเล็ต)
+      scrollContent: {
+        flexGrow: 1,
+        minHeight: height,
+        paddingBottom: vscale(16),
+      },
+    });
+  }, [width, height, fontScale, scale, vscale, fscale, isTablet, TOP_GAP]);
+
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -31,10 +162,7 @@ const ForgotPassword = () => {
     try {
       setBusy(true);
       await sendPasswordResetEmail(auth, email.trim());
-      Alert.alert(
-        "ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว",
-        "กรุณาตรวจสอบกล่องอีเมลของคุณ"
-      );
+      Alert.alert("ส่งลิงก์รีเซ็ตรหัสผ่านแล้ว", "กรุณาตรวจสอบกล่องอีเมลของคุณ");
       router.replace("/(auth)/login"); // กลับไปหน้า Login
     } catch (e: any) {
       Alert.alert("เกิดข้อผิดพลาด", e?.message || "ลองใหม่อีกครั้ง");
@@ -48,22 +176,27 @@ const ForgotPassword = () => {
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? Math.max(TOP_GAP, 60) : 0}
       >
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-          <SafeAreaView style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
             {/* Back */}
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.replace("/(auth)/login")}
+              activeOpacity={0.8}
             >
-              <Ionicons name="arrow-back" size={22} color="#0F2B56" />
+              <Ionicons name="arrow-back" size={scale(22)} color="#0F2B56" />
             </TouchableOpacity>
 
             {/* Logo */}
             <Image
               source={{ uri: "https://img2.pic.in.th/pic/LogoRound.png" }}
               style={styles.logo}
+              resizeMode="contain"
             />
 
             {/* Title */}
@@ -77,9 +210,9 @@ const ForgotPassword = () => {
               <View style={styles.inputContainer}>
                 <Ionicons
                   name="mail-outline"
-                  size={18}
+                  size={scale(18)}
                   color="#8aa0c2"
-                  style={{ marginRight: 6 }}
+                  style={{ marginRight: scale(6) }}
                 />
                 <TextInput
                   style={styles.input}
@@ -89,6 +222,8 @@ const ForgotPassword = () => {
                   autoCapitalize="none"
                   keyboardType="email-address"
                   placeholderTextColor="#9aa3b2"
+                  returnKeyType="send"
+                  onSubmitEditing={handleReset}
                 />
               </View>
 
@@ -112,91 +247,3 @@ const ForgotPassword = () => {
 };
 
 export default ForgotPassword;
-
-/* ======================== Styles ======================== */
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#EEF4FF",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 24,
-  },
-  backButton: {
-    position: "absolute",
-    top: 18,
-    left: 14,
-    zIndex: 10,
-    backgroundColor: "#ffffff",
-    padding: 8,
-    borderRadius: 999,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  logo: { width: 120, height: 120, marginTop: 12 },
-  title: {
-    fontSize: 26,
-    marginTop: 8,
-    color: "#2423ff",
-    fontFamily: "kanitB",
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#3b6fb6",
-    fontFamily: "kanitM",
-    marginTop: 6,
-    marginBottom: 16,
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 500,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    borderWidth: 1,
-    borderColor: "#D8E6FF",
-    shadowColor: "#3578d0",
-    shadowOpacity: 0.07,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 18,
-    elevation: 2,
-  },
-  inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderRadius: 14,
-    borderColor: "#dfe5ef",
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 18,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: "kanitM",
-    color: "#0F2B56",
-  },
-  submit: {
-    backgroundColor: "#2423ff",
-    marginTop: 6,
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    shadowColor: "#2423ff",
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  submitText: { color: "#fff", fontSize: 16, fontFamily: "kanitB" },
-});
